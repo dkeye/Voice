@@ -1,0 +1,17 @@
+# Go
+/bin/
+/build/
+/dist/
+*.exe
+*.out
+*.test
+
+# Logs
+*.log
+
+# Configs
+.env
+/configs/*.local.yaml
+
+# Docker
+*.pid

@@ -1,0 +1,29 @@
+# --- system & vcs ---
+.git
+.gitignore
+.dockerignore
+.idea
+.vscode
+*.swp
+*.swo
+
+# --- build artifacts ---
+/bin
+/build
+/dist
+*.out
+*.exe
+*.test
+
+# --- Go modules cache ---
+/vendor
+/go/pkg
+/go/bin
+
+# --- logs & configs ---
+*.log
+*.pid
+*.tmp
+*.local.yaml
+.env
+/configs/local/*
