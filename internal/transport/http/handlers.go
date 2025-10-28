@@ -1,7 +1,6 @@
 package http
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -20,6 +19,12 @@ type JoinResponse struct {
 
 func SetupRouter() *gin.Engine {
 	router := gin.Default()
+
+	router.Static("/static", "./web")
+	router.GET("/", func(c *gin.Context) {
+		c.File("./web/index.html")
+	})
+
 	room := core.NewRoom("main")
 	go room.Run()
 
@@ -51,9 +56,5 @@ func handleJoinRoom(r *core.Room) func(c *gin.Context) {
 
 		go client.ReadPump()
 		go client.WritePump()
-
-		c.JSON(http.StatusOK, JoinResponse{
-			Message: fmt.Sprintf("Client %s join room %s!", client.Name, r.Name),
-		})
 	}
 }

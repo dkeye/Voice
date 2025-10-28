@@ -9,4 +9,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o voice ./cmd/server
 FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/voice .
+COPY --from=builder /app/web ./web
 CMD [ "./voice" ]
