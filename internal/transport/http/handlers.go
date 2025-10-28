@@ -18,7 +18,11 @@ type JoinResponse struct {
 }
 
 func SetupRouter() *gin.Engine {
-	router := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+
+	router.Use(gin.Recovery())
+	router.Use(gin.Logger())
 
 	router.Static("/static", "./web")
 	router.GET("/", func(c *gin.Context) {

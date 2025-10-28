@@ -3,6 +3,28 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    ports:
-      - "8080:8080"
+    container_name: voice-app
+    expose:
+      - "8080"
     restart: unless-stopped
+    networks:
+      - voice_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: voice-nginx
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - voice
+    restart: unless-stopped
+    networks:
+      - voice_net
+
+networks:
+  voice_net:
+    driver: bridge
