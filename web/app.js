@@ -1,4 +1,3 @@
-const WS_URL = "ws://localhost:8080/join?name=Browser";
 const SAMPLE_RATE = 48000;
 const CAPTURE_BLOCK = 128;
 const SEND_FRAME_SAMPLES = 4096;
@@ -72,7 +71,22 @@ async function setupAudio() {
     source.connect(workletNode);
 }
 
+function buildWSUrl() {
+    const input = document.getElementById("userName");
+    let name = input?.value?.trim();
+
+    if (!name) {
+        const rand = Math.random().toString(36).substring(2, 6);
+        name = "user-" + rand;
+        input.value = name;
+    }
+
+    const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+    return `${protocol}${location.host}/join?name=${encodeURIComponent(name)}`;
+}
+
 async function setupWS() {
+    const WS_URL = buildWSUrl();
     ws = new WebSocket(WS_URL);
     ws.binaryType = "arraybuffer";
     ws.onopen = () => log("WS connected");
