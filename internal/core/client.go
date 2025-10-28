@@ -47,7 +47,7 @@ func (c *Client) ReadPump() {
 		if err != nil {
 			break
 		}
-		c.Room.Broadcast <- msg
+		c.Room.Broadcast <- Message{Sender: c, Data: msg}
 	}
 }
 
