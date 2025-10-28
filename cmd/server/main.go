@@ -1,4 +1,3 @@
-// main.go
 package main
 
 import (
@@ -10,13 +9,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dkeye/Voice/internal/config"
 	handlers "github.com/dkeye/Voice/internal/transport/http"
 )
 
 func main() {
-	r := handlers.SetupRouter()
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Println("⚠️ Failed to load config:", err)
+	}
+
+	r := handlers.SetupRouter(cfg)
+	addr := fmt.Sprintf(":%d", cfg.Port)
+
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    addr,
 		Handler: r,
 	}
 

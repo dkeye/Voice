@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/dkeye/Voice/internal/config"
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -17,25 +18,24 @@ type JoinResponse struct {
 	Message string `json:"message"`
 }
 
-func SetupRouter() *gin.Engine {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.New()
+func SetupRouter(cfg *config.Config) *gin.Engine {
+	r := gin.New()
+	if cfg.Mode == "debug" {
+		r.Use(gin.Logger())
+	}
+	r.Use(gin.Recovery())
 
-	router.Use(gin.Recovery())
-	router.Use(gin.Logger())
-
-	router.Static("/static", "./web")
-	router.GET("/", func(c *gin.Context) {
-		c.File("./web/index.html")
+	r.Static("/static", cfg.StaticPath)
+	r.GET("/", func(c *gin.Context) {
+		c.File(cfg.StaticPath + "/index.html")
 	})
 
 	room := core.NewRoom("main")
 	go room.Run()
-
-	router.GET("/join", handleJoinRoom(room))
-
-	return router
+	r.GET("/join", handleJoinRoom(room))
+	return r
 }
+
 
 func handleJoinRoom(r *core.Room) func(c *gin.Context) {
 	return func(c *gin.Context) {
