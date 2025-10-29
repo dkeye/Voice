@@ -20,9 +20,25 @@ const log = msg => {
 
 document.getElementById("connect").onclick = connect;
 const talkBtn = document.getElementById("talk");
-talkBtn.onmousedown = () => setTalking(true);
-talkBtn.onmouseup   = () => setTalking(false);
-talkBtn.onmouseleave = () => setTalking(false);
+const toggleMode = document.getElementById('toggleMode');
+let toggleState = false;
+
+talkBtn.onmousedown = () => {
+  if (toggleMode?.checked) {
+    toggleState = !toggleState;
+    setTalking(toggleState);
+  } else {
+    setTalking(true);
+  }
+};
+
+talkBtn.onmouseup = () => {
+  if (!toggleMode?.checked) setTalking(false);
+};
+
+talkBtn.onmouseleave = () => {
+  if (!toggleMode?.checked) setTalking(false);
+};
 
 // ----------------------------
 //  Build WS URL with username
