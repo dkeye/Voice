@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -18,7 +19,7 @@ type JoinResponse struct {
 	Message string `json:"message"`
 }
 
-func SetupRouter(cfg *config.Config) *gin.Engine {
+func SetupRouter(ctx context.Context, cfg *config.Config) *gin.Engine {
 	r := gin.New()
 	if cfg.Mode == "debug" {
 		r.Use(gin.Logger())
@@ -30,20 +31,25 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		c.File(cfg.StaticPath + "/index.html")
 	})
 
-	room := core.NewRoom("main")
-	go room.Run()
-	r.GET("/join", handleJoinRoom(room))
+	rm := core.NewRoomManager(ctx)
+
+	r.GET("/join", handleJoinRoom(rm))
+	r.GET("/rooms", func(c *gin.Context) {
+		c.JSON(200, gin.H{"rooms": rm.List()})
+	})
 	return r
 }
 
-
-func handleJoinRoom(r *core.Room) func(c *gin.Context) {
+func handleJoinRoom(rm *core.RoomManager) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		name := c.Query("name")
-		if name == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "missing or invalid name"})
+		username := c.Query("name")
+		roomName := c.Query("room")
+		if username == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "missing name"})
 			return
-
+		}
+		if roomName == "" {
+			roomName = "main"
 		}
 
 		upgrader := websocket.Upgrader{
@@ -54,9 +60,10 @@ func handleJoinRoom(r *core.Room) func(c *gin.Context) {
 			log.Println("upgrade error:", err)
 			return
 		}
+		room := rm.GetOrCreate(roomName)
 
-		client := core.NewClient(name, r, conn)
-		r.Register <- client
+		client := core.NewClient(username, room, conn)
+		room.AddClient(client)
 
 		go client.ReadPump()
 		go client.WritePump()

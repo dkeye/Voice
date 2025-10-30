@@ -31,7 +31,7 @@ func NewClient(name string, room *Room, conn *websocket.Conn) *Client {
 
 func (c *Client) ReadPump() {
 	defer func() {
-		c.Room.Unregister <- c
+		c.Room.RemoveClient(c)
 		c.Conn.Close()
 	}()
 
@@ -47,7 +47,7 @@ func (c *Client) ReadPump() {
 		if err != nil {
 			break
 		}
-		c.Room.Broadcast <- Message{Sender: c, Data: msg}
+		c.Room.broadcast <- Message{Sender: c, Data: msg}
 	}
 }
 
@@ -65,11 +65,18 @@ func (c *Client) WritePump() {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			c.Conn.WriteMessage(websocket.BinaryMessage, msg)
+			if err := c.Conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+				return
+			}
 
 		case <-ticker.C:
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			c.Conn.WriteMessage(websocket.PingMessage, nil)
 		}
 	}
+}
+
+func (c *Client) Close() {
+	c.Conn.Close()
+	close(c.Send)
 }

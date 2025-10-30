@@ -1,50 +1,105 @@
 package core
 
+import (
+	"context"
+	"sync"
+)
+
 type Message struct {
 	Sender *Client
-	Data []byte
+	Data   []byte
+}
+
+type RoomsInfo struct {
+	Name         string `json:"name"`
+	ClientsCount int    `json:"client_count"`
 }
 
 type Room struct {
-	Name       string
-	Clients    map[*Client]bool
-	Broadcast  chan Message
-	Register   chan *Client
-	Unregister chan *Client
+	Name string
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	mu      sync.RWMutex
+	clients map[*Client]bool
+
+	broadcast  chan Message
 }
 
-func NewRoom(name string) *Room {
+func (r *Room) GetClientsCount() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.clients)
+}
+
+func (r *Room) GetInfo() RoomsInfo {
+	return RoomsInfo{
+		Name:         r.Name,
+		ClientsCount: r.GetClientsCount(),
+	}
+}
+
+func NewRoom(ctx context.Context, cancel context.CancelFunc, name string) *Room {
 	return &Room{
 		Name:       name,
-		Clients:    make(map[*Client]bool),
-		Broadcast:  make(chan Message),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
+		ctx:        ctx,
+		cancel:     cancel,
+		mu:         sync.RWMutex{},
+		clients:    make(map[*Client]bool),
+		broadcast:  make(chan Message),
+	}
+}
+
+func (r *Room) AddClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.clients[c] = true
+}
+
+func (r *Room) RemoveClient(c *Client) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.clients[c]; ok {
+		c.Close()
+		delete(r.clients, c)
 	}
 }
 
 func (r *Room) Run() {
+	defer r.cleanup()
 	for {
 		select {
-		case c := <-r.Register:
-			r.Clients[c] = true
-		case c := <-r.Unregister:
-			if _, ok := r.Clients[c]; ok {
-				delete(r.Clients, c)
-				close(c.Send)
-			}
-		case msg := <-r.Broadcast:
-			for c := range r.Clients {
+		case <-r.ctx.Done():
+			return
+		case msg := <-r.broadcast:
+			r.mu.RLock()
+			for c := range r.clients {
 				if c == msg.Sender {
 					continue
 				}
 				select {
 				case c.Send <- msg.Data:
+				// if c.Send already close
 				default:
-					close(c.Send)
-					delete(r.Clients, c)
+					r.RemoveClient(c)
 				}
 			}
+			r.mu.RUnlock()
 		}
 	}
+}
+
+func (r *Room) cleanup() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for c := range r.clients {
+		close(c.Send)
+		delete(r.clients, c)
+	}
+	close(r.broadcast)
+}
+
+func (r *Room) Stop() {
+	r.cancel()
 }

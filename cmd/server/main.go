@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -14,12 +13,15 @@ import (
 )
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println("⚠️ Failed to load config:", err)
 	}
 
-	r := handlers.SetupRouter(cfg)
+	r := handlers.SetupRouter(ctx, cfg)
 	addr := fmt.Sprintf(":%d", cfg.Port)
 
 	srv := &http.Server{
@@ -34,14 +36,11 @@ func main() {
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
+	<-ctx.Done()
 	fmt.Println("Shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		fmt.Println("Server forced to shutdown:", err)
 	}
 	fmt.Println("Server exited gracefully.")
