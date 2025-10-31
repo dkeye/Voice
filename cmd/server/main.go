@@ -8,8 +8,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dkeye/Voice/internal/adapters"
+	"github.com/dkeye/Voice/internal/app"
 	"github.com/dkeye/Voice/internal/config"
-	handlers "github.com/dkeye/Voice/internal/transport/http"
 )
 
 func main() {
@@ -21,7 +22,15 @@ func main() {
 		fmt.Println("⚠️ Failed to load config:", err)
 	}
 
-	r := handlers.SetupRouter(ctx, cfg)
+	// Properly wire orchestrator with room manager and policy.
+	manager := app.NewRoomManager()
+	policy := app.SimplePolicy{}
+	orch := &app.Orchestrator{
+		Rooms:  manager,
+		Policy: policy,
+	}
+
+	r := adapters.SetupRouter(ctx, cfg, orch)
 	addr := fmt.Sprintf(":%d", cfg.Port)
 
 	srv := &http.Server{
@@ -30,7 +39,7 @@ func main() {
 	}
 
 	go func() {
-		fmt.Println("Voice server started at :8080")
+		fmt.Printf("Voice server started at %s\n", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Println("server error:", err)
 		}
