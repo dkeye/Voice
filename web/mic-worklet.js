@@ -1,38 +1,27 @@
-// mic-worklet.js — стабильный AudioWorklet-захват с аккумулированием блоков
-class CaptureProcessor extends AudioWorkletProcessor {
-    constructor(options) {
-        super();
-        this.blockSize = (options?.processorOptions?.blockSize) || 128;
-        this._buf = new Float32Array(0);
-    }
+// mic-worklet.js — streams mono Float32 blocks from the mic to main thread.
+// app.js converts to PCM16 and sends via WS.
 
+class MicProcessor extends AudioWorkletProcessor {
+    constructor() { super(); this._buf = new Float32Array(0); this.blockSize = 480; }
     process(inputs) {
-        const input = inputs[0];
-        if (!input || input.length === 0) return true;
-        const ch = input[0];
+        const ch = inputs?.[0]?.[0];
         if (!ch) return true;
 
-        // аккумулируем до blockSize и отправляем
+        // Concatenate and flush fixed-size packets
         let data = ch;
         if (this._buf.length) {
             const tmp = new Float32Array(this._buf.length + ch.length);
-            tmp.set(this._buf, 0);
-            tmp.set(ch, this._buf.length);
-            data = tmp;
-            this._buf = new Float32Array(0);
+            tmp.set(this._buf, 0); tmp.set(ch, this._buf.length);
+            data = tmp; this._buf = new Float32Array(0);
         }
-
-        let offset = 0;
-        while (offset + this.blockSize <= data.length) {
-            const slice = data.subarray(offset, offset + this.blockSize);
+        let off = 0;
+        while (off + this.blockSize <= data.length) {
+            const slice = data.subarray(off, off + this.blockSize).slice();
             this.port.postMessage(slice, [slice.buffer]);
-            offset += this.blockSize;
+            off += this.blockSize;
         }
-        if (offset < data.length) {
-            this._buf = data.subarray(offset).slice();
-        }
+        if (off < data.length) this._buf = data.subarray(off).slice();
         return true;
     }
 }
-
-registerProcessor("capture-processor", CaptureProcessor);
+registerProcessor('mic-worklet', MicProcessor);
