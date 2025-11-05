@@ -2,6 +2,8 @@ package adapters
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net/http"
 
@@ -9,16 +11,31 @@ import (
 	"github.com/dkeye/Voice/internal/config"
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/dkeye/Voice/internal/domain"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
-// SetupRouter wires HTTP routes (REST + WS) with orchestrator and transport.
-// - Static files are served from cfg.StaticPath.
-// - REST is under /api/*
-// - WebSocket upgrade lives at /ws/join
+func genClientToken() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
+
+func ClientTokenMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token, _ := c.Cookie("ct")
+		if token == "" {
+			token = genClientToken()
+			c.SetCookie("ct", token, 3600*24*7, "/", "", false, true)
+		}
+		c.Set("client_token", token)
+		c.Next()
+	}
+}
+
 func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator) *gin.Engine {
-	// Use explicit mode if provided in config.
 	if cfg.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -29,103 +46,63 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator
 	}
 	r.Use(gin.Recovery())
 
-	// Static UI
+	store := cookie.NewStore([]byte(cfg.Secret))
+	r.Use(sessions.Sessions("VoiceSessions", store))
+	r.Use(ClientTokenMiddleware())
+
 	r.Static("/static", cfg.StaticPath)
 	r.GET("/", func(c *gin.Context) {
 		c.File(cfg.StaticPath + "/index.html")
 	})
 
-	// -------------------------
-	// REST API
-	// -------------------------
 	api := r.Group("/api")
 
-	// GET /api/rooms — list rooms
 	api.GET("/rooms", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"rooms": orch.Rooms.List()})
 	})
 
-	// POST /api/rooms — create (or get) a room
-	api.POST("/rooms", func(c *gin.Context) {
-		var req struct {
-			Name string `json:"name"`
-		}
-		if err := c.BindJSON(&req); err != nil || req.Name == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid name"})
-			return
-		}
-		room := orch.Rooms.GetOrCreate(domain.RoomName(req.Name))
-		c.JSON(http.StatusOK, gin.H{
-			"name":        room.Room().Name,
-			"memberCount": room.MemberCount(),
-		})
-	})
-
-	// GET /api/rooms/:name — room info
 	api.GET("/rooms/:name", func(c *gin.Context) {
 		name := domain.RoomName(c.Param("name"))
 		room := orch.Rooms.GetOrCreate(name)
 		c.JSON(http.StatusOK, gin.H{
 			"name":        room.Room().Name,
 			"memberCount": room.MemberCount(),
+			"members":     room.MembersSnapshot(),
 		})
 	})
 
-	// DELETE /api/rooms/:name — stop/delete room
-	api.DELETE("/rooms/:name", func(c *gin.Context) {
-		name := domain.RoomName(c.Param("name"))
-		orch.Rooms.StopRoom(name)
+	api.POST("/me/leave", func(c *gin.Context) {
+		sessionID := core.SessionID(c.GetString("client_token"))
+		orch.KickBySID(sessionID)
 		c.Status(http.StatusNoContent)
 	})
 
-	// GET /api/rooms/:name/members — list members in a room
-	api.GET("/rooms/:name/members", func(c *gin.Context) {
-		name := domain.RoomName(c.Param("name"))
-		room := orch.Rooms.GetOrCreate(name)
-		// Requires RoomService.MembersSnapshot() in core
-		c.JSON(http.StatusOK, room.MembersSnapshot())
-	})
-
-	// DELETE /api/rooms/:name/members/:id — kick member
-	api.DELETE("/rooms/:name/members/:id", func(c *gin.Context) {
-		name := domain.RoomName(c.Param("name"))
-		id := domain.UserID(c.Param("id"))
-		room := orch.Rooms.GetOrCreate(name)
-		// Note: this only removes membership; adapter-owned transport
-		// should be closed by policy or on read-loop exit.
-		room.RemoveMember(id)
+	api.POST("/me/move", func(c *gin.Context) {
+		sessionID := core.SessionID(c.GetString("client_token"))
+		to := c.Query("to")
+		if to == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "missing to"})
+			return
+		}
+		ok := orch.Move(sessionID, to)
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+			return
+		}
 		c.Status(http.StatusNoContent)
 	})
 
-	// TODO: POST /api/rooms/:name/move?id={id}&to={room}
-	// Implement proper "move without reconnect" once RoomManager exposes
-	// MemberSession lookup and cross-room re-attach.
-
-	// -------------------------
-	// WebSocket JOIN
-	// -------------------------
-	// GET /ws/join?room={roomName}&id={userId}&name={username}
-	r.GET("/ws/join", func(c *gin.Context) {
+	api.GET("/ws/join", func(c *gin.Context) {
 		username := c.Query("name")
-		idParam := c.Query("id")
-
-		// Either id or name must be provided (id wins if both present).
-		if username == "" && idParam == "" {
+		if username == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing id or name"})
 			return
 		}
-		if idParam == "" {
-			idParam = username
-		}
-		if username == "" {
-			username = idParam
-		}
-
-		userID := domain.UserID(idParam)
+		sessionID := core.SessionID(c.GetString("client_token"))
+		userID := domain.UserID(c.GetString("client_token"))
 		roomName := domain.RoomName(c.DefaultQuery("room", "main"))
 
 		upgrader := websocket.Upgrader{
-			// TODO: In production, restrict origins as needed.
 			CheckOrigin: func(r *http.Request) bool { return true },
 		}
 		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -134,28 +111,16 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator
 			return
 		}
 
-		// Core room
-		room := orch.Rooms.GetOrCreate(roomName)
-
-		// Domain meta
 		user := domain.NewUser(userID, username)
 		memberMeta := domain.NewMember(user)
-
-		// Transport endpoint
-		wsConn := NewWSConnection(userID, ws)
-
-		// Core session (meta + transport)
+		wsConn := NewWSConnection(sessionID, ws)
 		session := core.NewMemberSession(memberMeta, wsConn)
+		connCtx, connCancel := context.WithCancel(ctx)
 
-		// Register in room
-		room.AddMember(session)
+		orch.Join(sessionID, roomName, session, connCancel)
 
-		// Connection-scoped context; cancel inherited by server shutdown.
-		connCtx, _ := context.WithCancel(ctx)
-
-		// Start transport pumps; read-loop will remove membership on exit.
 		wsConn.StartWriteLoop(connCtx)
-		wsConn.StartReadLoop(connCtx, room, orch)
+		wsConn.StartReadLoop(connCtx, orch)
 	})
 
 	return r

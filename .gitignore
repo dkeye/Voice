@@ -15,3 +15,7 @@
 
 # Docker
 *.pid
+
+#VSCode
+.vscode
+*_debug_

@@ -1,0 +1,238 @@
+:root {
+    --bg: #0b0d10;
+    --panel: #111418;
+    --sub: #0d1117;
+    --fg: #e6edf3;
+    --muted: #9aa4b2;
+    --brand: #5865F2;
+    --border: #1f2630;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #f6f7fb;
+        --panel: #fff;
+        --sub: #f1f4f9;
+        --fg: #0b1220;
+        --muted: #5b6475;
+        --border: #e5e7eb;
+    }
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0
+}
+
+body {
+    background: var(--bg);
+    color: var(--fg);
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: 56px 1fr
+}
+
+header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+}
+
+header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0
+}
+
+.pill {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--sub)
+}
+
+.spacer {
+    flex: 1
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace
+}
+
+/* layout */
+main {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    min-height: 0;
+}
+
+@media (max-width:700px) {
+    main {
+        grid-template-columns: 1fr
+    }
+
+    .right {
+        border-left: none
+    }
+}
+
+/* panels */
+.left {
+    border-right: 1px solid var(--border);
+    background: var(--sub);
+    overflow: auto
+}
+
+.right {
+    border-left: 1px solid var(--border);
+    overflow: auto;
+    padding: 12px;
+    background: var(--panel)
+}
+
+/* rooms list */
+.section {
+    padding: 12px 12px 4px;
+    font-size: 12px;
+    color: var(--muted)
+}
+
+.rooms {
+    display: grid;
+    gap: 6px;
+    padding: 6px 8px 16px
+}
+
+.room {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer
+}
+
+.room:hover {
+    background: rgba(88, 101, 242, .12)
+}
+
+.room.active {
+    background: rgba(88, 101, 242, .18);
+    outline: 1px solid rgba(88, 101, 242, .35)
+}
+
+.room .ic {
+    width: 18px;
+    display: grid;
+    place-items: center;
+    opacity: .9
+}
+
+.room .name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden
+}
+
+.room .badge {
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+    background: var(--panel)
+}
+
+/* members under rooms */
+.member {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 6px;
+    margin: 0 0 2px 30px;
+    border-radius: 8px
+}
+
+.member:hover {
+    background: rgba(255, 255, 255, .03)
+}
+
+.avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background: #2b2f36;
+    color: #cbd5e1;
+    border: 1px solid #3a4150;
+    font-weight: 700;
+    font-size: 11px
+}
+
+.mono-sm {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 12px
+}
+
+/* controls */
+input,
+button {
+    font: inherit;
+    color: inherit;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 10px 12px;
+    outline: none
+}
+
+input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand), transparent 80%)
+}
+
+button {
+    cursor: pointer
+}
+
+button.primary {
+    background: linear-gradient(180deg, color-mix(in oklab, var(--brand), #fff 14%), var(--brand));
+    color: #fff;
+    border-color: color-mix(in oklab, var(--brand), #000 20%)
+}
+
+button[disabled] {
+    opacity: .55;
+    cursor: not-allowed
+}
+
+pre#log {
+    background: #0a0f14;
+    color: #a7f3d0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.4
+}
+
+.row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 6px
+}

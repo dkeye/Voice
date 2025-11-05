@@ -25,7 +25,9 @@ func main() {
 	// Properly wire orchestrator with room manager and policy.
 	manager := app.NewRoomManager()
 	policy := app.SimplePolicy{}
+	reg := app.NewRegistry()
 	orch := &app.Orchestrator{
+		Registry: reg,
 		Rooms:  manager,
 		Policy: policy,
 	}

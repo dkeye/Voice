@@ -9,15 +9,17 @@ import (
 // roomImpl is a threadsafe in-memory room.
 // It never closes adapter-owned resources.
 type roomImpl struct {
-	room    *domain.Room
-	mu      sync.RWMutex
-	members map[domain.UserID]MemberSession
+	room   *domain.Room
+	mu     sync.RWMutex
+	bySID  map[SessionID]MemberSession
+	byUser map[domain.UserID]SessionID
 }
 
 func NewRoomService(room *domain.Room) RoomService {
 	return &roomImpl{
-		room:    room,
-		members: make(map[domain.UserID]MemberSession),
+		room:   room,
+		bySID:  make(map[SessionID]MemberSession),
+		byUser: make(map[domain.UserID]SessionID),
 	}
 }
 
@@ -26,41 +28,40 @@ func (r *roomImpl) Room() *domain.Room { return r.room }
 func (r *roomImpl) MemberCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return len(r.members)
+	return len(r.bySID)
 }
 
-func (r *roomImpl) AddMember(ms MemberSession) {
+func (r *roomImpl) AddMember(sid SessionID, ms MemberSession) {
+	u := ms.Meta().User.ID
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id := ms.Meta().User.ID
-	r.members[id] = ms
+	r.bySID[sid] = ms
+	r.byUser[u] = sid
 }
 
-func (r *roomImpl) RemoveMember(id domain.UserID) {
+func (r *roomImpl) RemoveMember(sid SessionID) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.members, id)
+	if ms, ok := r.bySID[sid]; ok {
+		u := ms.Meta().User.ID
+		delete(r.byUser, u)
+	}
+	delete(r.bySID, sid)
 }
 
-func (r *roomImpl) Broadcast(from domain.UserID, data Frame) PublishResult {
+func (r *roomImpl) Broadcast(from SessionID, data Frame) PublishResult {
 	r.mu.RLock()
-	// Copy recipients under read lock to avoid holding the lock during sends.
-	targets := make([]MemberSession, 0, len(r.members))
-	for id, ms := range r.members {
-		if id == from {
+	defer r.mu.RUnlock()
+	res := PublishResult{}
+	for sid, m := range r.bySID {
+		if sid == from {
 			continue
 		}
-		targets = append(targets, ms)
-	}
-	r.mu.RUnlock()
-
-	var res PublishResult
-	for _, ms := range targets {
-		if err := ms.Conn().TrySend(data); err != nil {
-			res.Dropped = append(res.Dropped, ms)
-		} else {
-			res.SendTo++
+		if err := m.Conn().TrySend(data); err != nil {
+			res.Dropped = append(res.Dropped, m)
+			continue
 		}
+		res.SendTo++
 	}
 	return res
 }
@@ -68,8 +69,8 @@ func (r *roomImpl) Broadcast(from domain.UserID, data Frame) PublishResult {
 func (r *roomImpl) MembersSnapshot() []MemberDTO {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]MemberDTO, 0, len(r.members))
-	for _, ms := range r.members {
+	out := make([]MemberDTO, 0, len(r.bySID))
+	for _, ms := range r.bySID {
 		u := ms.Meta().User
 		out = append(out, MemberDTO{ID: u.ID, Username: u.Username})
 	}
