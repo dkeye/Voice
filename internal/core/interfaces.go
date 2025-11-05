@@ -5,10 +5,11 @@ import "github.com/dkeye/Voice/internal/domain"
 // Frame is a raw binary payload (e.g., audio frame).
 type Frame []byte
 
+type SessionID string
+
 // MemberConnection abstracts a transport endpoint (WS/WebRTC).
 // Owned by the adapter; the adapter must Close() it.
 type MemberConnection interface {
-	ID() domain.UserID
 	TrySend(Frame) error
 	Close()
 }
@@ -36,11 +37,12 @@ type MemberDTO struct {
 // It owns the membership set but never touches transport resources.
 type RoomService interface {
 	Room() *domain.Room
-	AddMember(MemberSession)
-	RemoveMember(id domain.UserID)
 	MemberCount() int
-	Broadcast(from domain.UserID, data Frame) PublishResult
 	MembersSnapshot() []MemberDTO
+
+	AddMember(sid SessionID, ms MemberSession)
+	RemoveMember(sid SessionID)
+	Broadcast(from SessionID, data Frame) PublishResult
 }
 
 type RoomInfo struct {

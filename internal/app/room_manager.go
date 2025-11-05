@@ -7,16 +7,16 @@ import (
 	"github.com/dkeye/Voice/internal/domain"
 )
 
-type RoomFactoryImpl struct {
+type RoomManagerImpl struct {
 	mu    sync.RWMutex
 	rooms map[domain.RoomName]core.RoomService
 }
 
 func NewRoomManager() core.RoomFactory {
-	return &RoomFactoryImpl{rooms: make(map[domain.RoomName]core.RoomService)}
+	return &RoomManagerImpl{rooms: make(map[domain.RoomName]core.RoomService)}
 }
 
-func (f *RoomFactoryImpl) GetOrCreate(name domain.RoomName) core.RoomService {
+func (f *RoomManagerImpl) GetOrCreate(name domain.RoomName) core.RoomService {
 	f.mu.RLock()
 	room, ok := f.rooms[name]
 	f.mu.RUnlock()
@@ -33,7 +33,7 @@ func (f *RoomFactoryImpl) GetOrCreate(name domain.RoomName) core.RoomService {
 	return room
 }
 
-func (f *RoomFactoryImpl) List() []core.RoomInfo {
+func (f *RoomManagerImpl) List() []core.RoomInfo {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	out := make([]core.RoomInfo, 0, len(f.rooms))
@@ -43,8 +43,8 @@ func (f *RoomFactoryImpl) List() []core.RoomInfo {
 	return out
 }
 
-func (f *RoomFactoryImpl) StopRoom(name domain.RoomName) {
+func (f *RoomManagerImpl) StopRoom(name domain.RoomName) {
 	f.mu.Lock()
+	defer f.mu.Unlock()
 	delete(f.rooms, name)
-	f.mu.Unlock()
 }

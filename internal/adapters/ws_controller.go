@@ -8,13 +8,11 @@ import (
 
 	"github.com/dkeye/Voice/internal/app"
 	"github.com/dkeye/Voice/internal/core"
-	"github.com/dkeye/Voice/internal/domain"
 	"github.com/gorilla/websocket"
 )
 
 var ErrBackpressure = errors.New("backpressure")
 
-// WSConn is an indirection over *websocket.Conn to ease testing.
 type WSConn interface {
 	ReadMessage() (int, []byte, error)
 	WriteMessage(mt int, data []byte) error
@@ -22,24 +20,20 @@ type WSConn interface {
 	Close() error
 }
 
-// WSConnection is a transport endpoint (WebSocket).
-// It implements core.MemberConnection.
 type WSConnection struct {
-	id   domain.UserID
+	sid  core.SessionID
 	conn WSConn
 	send chan core.Frame
 	once sync.Once
 }
 
-func NewWSConnection(id domain.UserID, conn WSConn) *WSConnection {
+func NewWSConnection(sid core.SessionID, conn WSConn) *WSConnection {
 	return &WSConnection{
-		id:   id,
+		sid:  sid,
 		conn: conn,
 		send: make(chan core.Frame, 256),
 	}
 }
-
-func (c *WSConnection) ID() domain.UserID { return c.id }
 
 func (c *WSConnection) TrySend(f core.Frame) error {
 	select {
@@ -57,11 +51,8 @@ func (c *WSConnection) Close() {
 	})
 }
 
-// StartWriteLoop pumps frames to the network.
-// Adapter owns transport resources and closes them on exit.
 func (c *WSConnection) StartWriteLoop(ctx context.Context) {
 	go func() {
-		defer c.Close()
 		for {
 			select {
 			case <-ctx.Done():
@@ -79,13 +70,12 @@ func (c *WSConnection) StartWriteLoop(ctx context.Context) {
 	}()
 }
 
-// StartReadLoop reads frames and forwards them to orchestrator.
-// IMPORTANT: On exit we must remove the member from the room to avoid leaks.
-func (c *WSConnection) StartReadLoop(ctx context.Context, room core.RoomService, o *app.Orchestrator) {
+func (c *WSConnection) StartReadLoop(ctx context.Context, o *app.Orchestrator) {
 	go func() {
-		defer c.Close()
-		defer room.RemoveMember(c.id)
-
+		defer func() {
+			o.OnDisconnect(c.sid)
+			c.Close()
+		}()
 		for {
 			select {
 			case <-ctx.Done():
@@ -95,7 +85,7 @@ func (c *WSConnection) StartReadLoop(ctx context.Context, room core.RoomService,
 				if err != nil {
 					return
 				}
-				o.OnFrameReceived(room, c.id, core.Frame(data))
+				o.OnFrame(c.sid, core.Frame(data))
 			}
 		}
 	}()
