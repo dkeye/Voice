@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"log"
 	"net/http"
 
 	"github.com/dkeye/Voice/internal/app"
@@ -14,7 +13,6 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
 )
 
 func genClientToken() string {
@@ -92,35 +90,42 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator
 		c.Status(http.StatusNoContent)
 	})
 
-	api.GET("/ws/join", func(c *gin.Context) {
-		username := c.Query("name")
-		if username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "missing id or name"})
-			return
+	// api.GET("/ws/join", func(c *gin.Context) {
+	// 	username := c.Query("name")
+	// 	if username == "" {
+	// 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id or name"})
+	// 		return
+	// 	}
+	// 	sessionID := core.SessionID(c.GetString("client_token"))
+	// 	userID := domain.UserID(c.GetString("client_token"))
+	// 	roomName := domain.RoomName(c.DefaultQuery("room", "main"))
+
+	// 	upgrader := websocket.Upgrader{
+	// 		CheckOrigin: func(r *http.Request) bool { return true },
+	// 	}
+	// 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	// 	if err != nil {
+	// 		log.Println("websocket upgrade error:", err)
+	// 		return
+	// 	}
+
+	// 	user := domain.NewUser(userID, username)
+	// 	memberMeta := domain.NewMember(user)
+	// 	wsConn := NewWSConnection(sessionID, ws)
+	// 	session := core.NewMemberSession(memberMeta, wsConn)
+	// 	connCtx, connCancel := context.WithCancel(ctx)
+
+	// 	orch.Join(sessionID, roomName, session, connCancel)
+
+	// 	wsConn.StartWriteLoop(connCtx)
+	// 	wsConn.StartReadLoop(connCtx, orch)
+	// })
+
+	api.GET("/ws/signal", func(c *gin.Context) {
+		ctrl := &SignalWSController{
+			Orch: orch,
 		}
-		sessionID := core.SessionID(c.GetString("client_token"))
-		userID := domain.UserID(c.GetString("client_token"))
-		roomName := domain.RoomName(c.DefaultQuery("room", "main"))
-
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
-		}
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			log.Println("websocket upgrade error:", err)
-			return
-		}
-
-		user := domain.NewUser(userID, username)
-		memberMeta := domain.NewMember(user)
-		wsConn := NewWSConnection(sessionID, ws)
-		session := core.NewMemberSession(memberMeta, wsConn)
-		connCtx, connCancel := context.WithCancel(ctx)
-
-		orch.Join(sessionID, roomName, session, connCancel)
-
-		wsConn.StartWriteLoop(connCtx)
-		wsConn.StartReadLoop(connCtx, orch)
+		ctrl.HandleSignal(ctx, c)
 	})
 
 	return r

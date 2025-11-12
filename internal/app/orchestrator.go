@@ -1,6 +1,8 @@
 package app
 
 import (
+	"log"
+
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/dkeye/Voice/internal/domain"
 )
@@ -11,18 +13,22 @@ type Orchestrator struct {
 	Policy   Policy
 }
 
-func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName, session core.MemberSession, cancel func()) {
-	_, _, _, ok := o.Registry.RoomOf(sid)
+func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName) {
+	RoomName, _, ok := o.Registry.RoomOf(sid)
 	if ok {
 		o.KickBySID(sid)
+		log.Printf("%s Kicked from room %s\n", sid, RoomName)
 	}
-	room := o.Rooms.GetOrCreate(roomName)
-	room.AddMember(sid, session)
-	o.Registry.BindSession(sid, session.Meta().User.ID, roomName, session, cancel)
+	if session, ok := o.Registry.GetSession(sid); ok {
+		room := o.Rooms.GetOrCreate(roomName)
+		room.AddMember(sid, session)
+		o.Registry.UpdateRoom(sid, roomName)
+		log.Printf("%s added to room %s\n", sid, roomName)
+	}
 }
 
 func (o *Orchestrator) OnFrame(sid core.SessionID, data core.Frame) {
-	roomName, _, _, ok := o.Registry.RoomOf(sid)
+	roomName, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
 	}
@@ -46,7 +52,7 @@ func (o *Orchestrator) OnFrame(sid core.SessionID, data core.Frame) {
 }
 
 func (o *Orchestrator) Move(sid core.SessionID, toRoomName string) bool {
-	fromRoomName, _, session, ok := o.Registry.RoomOf(sid)
+	fromRoomName, session, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return false
 	}
@@ -64,18 +70,17 @@ func (o *Orchestrator) Move(sid core.SessionID, toRoomName string) bool {
 }
 
 func (o *Orchestrator) KickBySID(sid core.SessionID) {
-	roomName, _, _, ok := o.Registry.RoomOf(sid)
+	roomName, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
 	}
 	room := o.Rooms.GetOrCreate(roomName)
 	room.RemoveMember(sid)
-	o.Registry.Unbind(sid)
-	o.Registry.Cancel(sid)
+	o.Registry.RemoveRoom(sid)
 }
 
 func (o *Orchestrator) OnDisconnect(sid core.SessionID) {
-	roomName, _, _, ok := o.Registry.RoomOf(sid)
+	roomName, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
 	}

@@ -57,7 +57,7 @@ func (r *roomImpl) Broadcast(from SessionID, data Frame) PublishResult {
 		if sid == from {
 			continue
 		}
-		if err := m.Conn().TrySend(data); err != nil {
+		if err := m.Signal().TrySend(data); err != nil {
 			res.Dropped = append(res.Dropped, m)
 			continue
 		}
