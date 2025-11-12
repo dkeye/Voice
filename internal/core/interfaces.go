@@ -7,9 +7,9 @@ type Frame []byte
 
 type SessionID string
 
-// MemberConnection abstracts a transport endpoint (WS/WebRTC).
+// SignalConnection abstracts for a system messaging transport
 // Owned by the adapter; the adapter must Close() it.
-type MemberConnection interface {
+type SignalConnection interface {
 	TrySend(Frame) error
 	Close()
 }
@@ -18,7 +18,7 @@ type MemberConnection interface {
 // This is what a room stores and fans out to.
 type MemberSession interface {
 	Meta() *domain.Member
-	Conn() MemberConnection
+	Signal() SignalConnection
 }
 
 // PublishResult reports delivery stats/backpressure to orchestrator.

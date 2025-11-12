@@ -9,66 +9,106 @@ import (
 )
 
 type sessionEntry struct {
-	UserID   domain.UserID
 	RoomName domain.RoomName
 	Session  core.MemberSession
 	Cancel   context.CancelFunc
 }
 
 type Registry struct {
-	mu   sync.RWMutex
-	sess map[core.SessionID]sessionEntry
+	mu       sync.RWMutex
+	sessions map[core.SessionID]*sessionEntry
+	users    map[core.SessionID]*domain.User
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		sess: make(map[core.SessionID]sessionEntry),
+		sessions: make(map[core.SessionID]*sessionEntry),
+		users:    make(map[core.SessionID]*domain.User),
+	}
+}
+
+func (r *Registry) GetOrCreateUser(sid core.SessionID) *domain.User {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.users[sid]; ok {
+		return u
+	}
+	u := &domain.User{ID: domain.UserID(sid), Username: "guest"}
+	r.users[sid] = u
+	return u
+}
+
+func (r *Registry) UpdateUsername(sid core.SessionID, name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if u, ok := r.users[sid]; ok {
+		u.Username = name
 	}
 }
 
 func (r *Registry) BindSession(
 	sid core.SessionID,
-	user domain.UserID,
 	roomName domain.RoomName,
 	sess core.MemberSession,
 	cancel context.CancelFunc,
 ) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.sess[sid] = sessionEntry{
-		UserID:   user,
+	r.sessions[sid] = &sessionEntry{
 		RoomName: roomName,
 		Session:  sess,
 		Cancel:   cancel,
 	}
 }
 
+func (r *Registry) BindSignal(sid core.SessionID, sess core.MemberSession, cancel context.CancelFunc) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessions[sid] = &sessionEntry{Session: sess, Cancel: cancel}
+}
+
+func (r *Registry) GetSession(sid core.SessionID) (core.MemberSession, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if e, ok := r.sessions[sid]; ok {
+		return e.Session, true
+	}
+	return nil, false
+}
+
 func (r *Registry) Unbind(sid core.SessionID) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.sess, sid)
+	delete(r.sessions, sid)
 }
 
-func (r *Registry) RoomOf(sid core.SessionID) (domain.RoomName, domain.UserID, core.MemberSession, bool) {
+func (r *Registry) RoomOf(sid core.SessionID) (domain.RoomName, core.MemberSession, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	entry, ok := r.sess[sid]
-	if !ok {
-		return "", "", nil, false
+	entry, ok := r.sessions[sid]
+	if !ok || entry.RoomName == "" {
+		return "", nil, false
 	}
-	return entry.RoomName, entry.UserID, entry.Session, true
+	return entry.RoomName, entry.Session, true
 }
 
 func (r *Registry) UpdateRoom(sid core.SessionID, newRoom domain.RoomName) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	entry, ok := r.sess[sid]
+	entry, ok := r.sessions[sid]
 	if !ok {
 		return false
 	}
 	entry.RoomName = newRoom
-	r.sess[sid] = entry
 	return true
+}
+
+func (r *Registry) RemoveRoom(sid core.SessionID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if entry, ok := r.sessions[sid]; ok {
+		entry.RoomName = ""
+	}
 }
 
 type regSnap struct {
@@ -79,8 +119,8 @@ type regSnap struct {
 func (r *Registry) MembersOfRoom(name domain.RoomName) []regSnap {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]regSnap, 0, len(r.sess))
-	for sid, e := range r.sess {
+	out := make([]regSnap, 0, len(r.sessions))
+	for sid, e := range r.sessions {
 		if e.RoomName == name {
 			out = append(out, regSnap{SID: sid, Session: e.Session})
 		}
@@ -90,7 +130,7 @@ func (r *Registry) MembersOfRoom(name domain.RoomName) []regSnap {
 
 func (r *Registry) Cancel(sid core.SessionID) bool {
 	r.mu.RLock()
-	e, ok := r.sess[sid]
+	e, ok := r.sessions[sid]
 	r.mu.RUnlock()
 	if !ok {
 		return false

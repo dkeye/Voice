@@ -5,12 +5,12 @@ import "github.com/dkeye/Voice/internal/domain"
 // memberSession implements MemberSession by pairing meta + transport.
 type memberSession struct {
 	meta *domain.Member
-	conn MemberConnection
+	signal SignalConnection
 }
 
-func NewMemberSession(meta *domain.Member, conn MemberConnection) MemberSession {
-	return &memberSession{meta: meta, conn: conn}
+func NewMemberSession(meta *domain.Member, conn SignalConnection) MemberSession {
+	return &memberSession{meta: meta, signal: conn}
 }
 
-func (m *memberSession) Meta() *domain.Member   { return m.meta }
-func (m *memberSession) Conn() MemberConnection { return m.conn }
+func (m *memberSession) Meta() *domain.Member     { return m.meta }
+func (m *memberSession) Signal() SignalConnection { return m.signal }
