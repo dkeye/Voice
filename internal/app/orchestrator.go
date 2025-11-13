@@ -80,6 +80,12 @@ func (o *Orchestrator) KickBySID(sid core.SessionID) {
 }
 
 func (o *Orchestrator) OnDisconnect(sid core.SessionID) {
+	if sess, ok := o.Registry.GetSession(sid); ok {
+		if mc := sess.Media(); mc != nil {
+			mc.Close()
+		}
+	}
+
 	roomName, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
