@@ -2,10 +2,10 @@ package adapters
 
 import (
 	"context"
-	"log"
 
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/pion/webrtc/v4"
+	"github.com/rs/zerolog/log"
 )
 
 type WebRTCConnection struct {
@@ -38,7 +38,7 @@ func (c *WebRTCConnection) Start(ctx context.Context) error {
 	c.cancel = cancel
 
 	c.pc.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
-		log.Printf("[webrtc][%s] ICE state: %s", c.sid, s.String())
+		log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Str("ice_state", s.String()).Msg("ICE state")
 		if s == webrtc.ICEConnectionStateDisconnected ||
 			s == webrtc.ICEConnectionStateFailed {
 			cancel()
@@ -78,9 +78,9 @@ func (c *WebRTCConnection) Close() {
 	}
 	if c.pc != nil {
 		if err := c.pc.Close(); err != nil {
-			log.Printf("[webrtc][%s] close error: %v", c.sid, err)
+			log.Error().Err(err).Str("module", "webrtc").Str("sid", string(c.sid)).Msg("close error")
 		} else {
-			log.Printf("[webrtc][%s] closed", c.sid)
+			log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Msg("closed")
 		}
 	}
 }

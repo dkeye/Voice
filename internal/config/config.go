@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -38,15 +39,15 @@ func Load() (*Config, error) {
 	v.SetDefault("ping_period", "54s")
 
 	if err := v.ReadInConfig(); err != nil {
-		fmt.Printf("⚠️ Config file not found (%s), using defaults\n", fileName)
+		log.Warn().Str("file", fileName).Msg("Config file not found, using defaults")
 	} else {
-		fmt.Printf("✅ Loaded config: %s\n", fileName)
+		log.Info().Str("file", fileName).Msg("Loaded config")
 	}
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
-	fmt.Printf("🧩 Mode: %s | Port: %d | Static: %s\n", cfg.Mode, cfg.Port, cfg.StaticPath)
+	log.Info().Str("mode", cfg.Mode).Int("port", cfg.Port).Str("static_path", cfg.StaticPath).Msg("Configuration summary")
 	return &cfg, nil
 }

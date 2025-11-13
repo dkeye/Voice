@@ -3,7 +3,6 @@ package adapters
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/pion/webrtc/v4"
+	"github.com/rs/zerolog/log"
 )
 
 type SignalWSController struct {
@@ -48,11 +48,11 @@ var upgrader = websocket.Upgrader{
 
 func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context) {
 	sid := core.SessionID(c.GetString("client_token"))
-	log.Printf("[signal] new WS connection sid=%s", sid)
+	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("new WS connection")
 
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("ws upgrade:", err)
+		log.Error().Err(err).Msg("ws upgrade")
 		return
 	}
 
@@ -75,19 +75,19 @@ func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[signal] writePump ctx done")
+			log.Info().Str("module", "signal").Msg("writePump ctx done")
 			return
 		case data, ok := <-c.send:
 			if !ok {
-				log.Printf("[signal] writePump channel closed")
+				log.Warn().Str("module", "signal").Msg("writePump channel closed")
 				return
 			}
 			if err := c.conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
-				log.Printf("[signal] writePump set deadline error: %v", err)
+				log.Error().Err(err).Str("module", "signal").Msg("writePump set deadline")
 				return
 			}
 			if err := c.conn.WriteMessage(websocket.TextMessage, data); err != nil {
-				log.Printf("[signal] writePump write error: %v", err)
+				log.Error().Err(err).Str("module", "signal").Msg("writePump write error")
 				return
 			}
 		}
@@ -96,7 +96,7 @@ func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
 
 func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *wsSignalConn) {
 	defer func() {
-		log.Printf("[signal] readPump closing sid=%s", sid)
+		log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump closing")
 		ctl.Orch.OnDisconnect(sid)
 		c.Close()
 	}()
@@ -104,12 +104,12 @@ func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID,
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[signal] readPump ctx done sid=%s", sid)
+			log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump ctx done")
 			return
 		default:
 			_, data, err := c.conn.ReadMessage()
 			if err != nil {
-				log.Printf("[signal] readPump read error sid=%s: %v", sid, err)
+				log.Error().Err(err).Str("module", "signal").Str("sid", string(sid)).Msg("readPump read error")
 				return
 			}
 			ctl.handleSignal(sid, c, data)
@@ -122,7 +122,7 @@ func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *wsSignalConn,
 		Type string `json:"type"`
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
-		log.Println("bad json:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("bad json")
 		return
 	}
 
@@ -142,14 +142,14 @@ func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *wsSignalConn,
 	case "candidate":
 		ctl.handleCandidate(sid, c, data)
 	default:
-		log.Println("unknown signal:", env.Type)
+		log.Warn().Str("module", "signal").Str("type", env.Type).Msg("unknown signal")
 	}
 }
 
 func (ctl *SignalWSController) sendJSON(c *wsSignalConn, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		log.Println("sendJSON marshal:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("sendJSON marshal")
 		return
 	}
 	_ = c.TrySend(b)
@@ -167,7 +167,7 @@ func (ctl *SignalWSController) handleJoin(
 	}
 	var p joinPayload
 	if err := json.Unmarshal(data, &p); err != nil {
-		log.Println("[signal] bad join payload:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("bad join payload")
 		return
 	}
 
@@ -178,10 +178,10 @@ func (ctl *SignalWSController) handleJoin(
 
 	if p.Name != "" {
 		ctl.Orch.Registry.UpdateUsername(sid, p.Name)
-		log.Printf("[signal] rename on join sid=%s name=%s", sid, p.Name)
+		log.Info().Str("module", "signal").Str("sid", string(sid)).Str("name", p.Name).Msg("rename on join")
 	}
 
-	log.Printf("[signal] join sid=%s room=%s", sid, roomName)
+	log.Info().Str("module", "signal").Str("sid", string(sid)).Str("room", string(roomName)).Msg("join")
 	ctl.Orch.Join(sid, roomName)
 
 	// Отдаём снапшот комнаты, чтобы клиент мог обновить UI.
@@ -205,7 +205,7 @@ func (ctl *SignalWSController) handleLeave(
 	sid core.SessionID,
 	conn *wsSignalConn,
 ) {
-	log.Printf("[signal] leave sid=%s", sid)
+	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("leave")
 	ctl.Orch.KickBySID(sid)
 	ctl.sendJSON(conn, map[string]any{
 		"type": "left",
@@ -234,7 +234,7 @@ func (ctl *SignalWSController) handleRename(
 	}
 	var p renamePayload
 	if err := json.Unmarshal(data, &p); err != nil {
-		log.Println("[signal] bad rename payload:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("bad rename payload")
 		return
 	}
 	if p.Name == "" {
@@ -245,7 +245,7 @@ func (ctl *SignalWSController) handleRename(
 		return
 	}
 
-	log.Printf("[signal] rename sid=%s name=%s", sid, p.Name)
+	log.Info().Str("module", "signal").Str("sid", string(sid)).Str("name", p.Name).Msg("rename")
 	ctl.Orch.Registry.UpdateUsername(sid, p.Name)
 	ctl.handleWhoAmI(sid, conn)
 }
@@ -301,14 +301,14 @@ func (ctl *SignalWSController) handleOffer(
 	}
 	var p offerPayload
 	if err := json.Unmarshal(data, &p); err != nil {
-		log.Println("bad offer payload:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("bad offer payload")
 		return
 	}
 
 	cfg := defaultWebRTCConfig()
 	wc, err := NewWebRTCConnection(cfg, sid)
 	if err != nil {
-		log.Println("webrtc new pc:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("webrtc new pc")
 		return
 	}
 
@@ -317,7 +317,7 @@ func (ctl *SignalWSController) handleOffer(
 	})
 
 	if err = wc.Start(context.Background()); err != nil {
-		log.Println("webrtc start:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("webrtc start")
 		wc.Close()
 		return
 	}
@@ -329,7 +329,7 @@ func (ctl *SignalWSController) handleOffer(
 
 	answer, err := wc.ApplyOfferAndCreateAnswer(offer)
 	if err != nil {
-		log.Println("webrtc apply offer:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("webrtc apply offer")
 		wc.Close()
 		return
 	}
@@ -357,7 +357,7 @@ func (ctl *SignalWSController) handleCandidate(
 	}
 	var p candidatePayload
 	if err := json.Unmarshal(data, &p); err != nil {
-		log.Println("bad candidate payload:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("bad candidate payload")
 		return
 	}
 
@@ -371,15 +371,15 @@ func (ctl *SignalWSController) handleCandidate(
 
 	sess, ok := ctl.Orch.Registry.GetSession(sid)
 	if !ok {
-		log.Println("candidate: no session for", sid)
+		log.Warn().Str("module", "signal").Str("sid", string(sid)).Msg("candidate: no session for")
 		return
 	}
 	mc := sess.Media()
 	if mc == nil {
-		log.Println("candidate: no media connection for", sid)
+		log.Warn().Str("module", "signal").Str("sid", string(sid)).Msg("candidate: no media connection for")
 		return
 	}
 	if err := mc.AddICECandidate(cand); err != nil {
-		log.Println("add ice candidate:", err)
+		log.Error().Err(err).Str("module", "signal").Msg("add ice candidate")
 	}
 }

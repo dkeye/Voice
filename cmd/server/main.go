@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/dkeye/Voice/internal/adapters"
 	"github.com/dkeye/Voice/internal/app"
@@ -17,9 +21,15 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	// Initialize zerolog global logger early so config.Load can use it.
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	// Human-friendly output for terminal; in production you may want JSON only.
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println("⚠️ Failed to load config:", err)
+		log.Error().Err(err).Msg("failed to load config")
 	}
 
 	// Properly wire orchestrator with room manager and policy.
@@ -28,8 +38,8 @@ func main() {
 	reg := app.NewRegistry()
 	orch := &app.Orchestrator{
 		Registry: reg,
-		Rooms:  manager,
-		Policy: policy,
+		Rooms:    manager,
+		Policy:   policy,
 	}
 
 	r := adapters.SetupRouter(ctx, cfg, orch)
@@ -41,18 +51,18 @@ func main() {
 	}
 
 	go func() {
-		fmt.Printf("Voice server started at %s\n", addr)
+		log.Info().Str("addr", addr).Msg("Voice server started")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Println("server error:", err)
+			log.Error().Err(err).Msg("server error")
 		}
 	}()
 
 	<-ctx.Done()
-	fmt.Println("Shutting down...")
+	log.Info().Msg("Shutting down")
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		fmt.Println("Server forced to shutdown:", err)
+		log.Error().Err(err).Msg("Server forced to shutdown")
 	}
-	fmt.Println("Server exited gracefully.")
+	log.Info().Msg("Server exited gracefully")
 }
