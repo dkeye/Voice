@@ -13,6 +13,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 )
 
 func genClientToken() string {
@@ -52,6 +53,8 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator
 	r.GET("/", func(c *gin.Context) {
 		c.File(cfg.StaticPath + "/index.html")
 	})
+
+	log.Info().Str("module", "adapters.http").Str("static", cfg.StaticPath).Msg("router setup")
 
 	api := r.Group("/api")
 
@@ -125,6 +128,7 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator
 		ctrl := &SignalWSController{
 			Orch: orch,
 		}
+		log.Info().Str("module", "adapters.http").Str("sid", c.GetString("client_token")).Msg("ws signal endpoint hit")
 		ctrl.HandleSignal(ctx, c)
 	})
 

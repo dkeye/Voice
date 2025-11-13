@@ -5,6 +5,7 @@ import (
 
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/dkeye/Voice/internal/domain"
+	"github.com/rs/zerolog/log"
 )
 
 type RoomManagerImpl struct {
@@ -30,6 +31,7 @@ func (f *RoomManagerImpl) GetOrCreate(name domain.RoomName) core.RoomService {
 	}
 	room = core.NewRoomService(&domain.Room{Name: name})
 	f.rooms[name] = room
+	log.Info().Str("module", "app.roommgr").Str("room", string(name)).Msg("created room")
 	return room
 }
 
@@ -47,4 +49,5 @@ func (f *RoomManagerImpl) StopRoom(name domain.RoomName) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.rooms, name)
+	log.Info().Str("module", "app.roommgr").Str("room", string(name)).Msg("stopped room")
 }

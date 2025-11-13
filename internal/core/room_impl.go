@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/dkeye/Voice/internal/domain"
+	"github.com/rs/zerolog/log"
 )
 
 // roomImpl is a threadsafe in-memory room.
@@ -37,6 +38,7 @@ func (r *roomImpl) AddMember(sid SessionID, ms MemberSession) {
 	defer r.mu.Unlock()
 	r.bySID[sid] = ms
 	r.byUser[u] = sid
+	log.Info().Str("module", "core.room").Str("sid", string(sid)).Str("user", string(u)).Msg("member added")
 }
 
 func (r *roomImpl) RemoveMember(sid SessionID) {
@@ -47,6 +49,7 @@ func (r *roomImpl) RemoveMember(sid SessionID) {
 		delete(r.byUser, u)
 	}
 	delete(r.bySID, sid)
+	log.Info().Str("module", "core.room").Str("sid", string(sid)).Msg("member removed")
 }
 
 func (r *roomImpl) Broadcast(from SessionID, data Frame) PublishResult {
@@ -63,6 +66,7 @@ func (r *roomImpl) Broadcast(from SessionID, data Frame) PublishResult {
 		}
 		res.SendTo++
 	}
+	log.Debug().Str("module", "core.room").Str("from", string(from)).Int("sent_to", res.SendTo).Int("dropped", len(res.Dropped)).Msg("broadcast result")
 	return res
 }
 

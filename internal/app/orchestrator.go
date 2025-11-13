@@ -1,7 +1,7 @@
 package app
 
 import (
-	"log"
+	"github.com/rs/zerolog/log"
 
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/dkeye/Voice/internal/domain"
@@ -17,13 +17,13 @@ func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName) {
 	RoomName, _, ok := o.Registry.RoomOf(sid)
 	if ok {
 		o.KickBySID(sid)
-		log.Printf("%s Kicked from room %s\n", sid, RoomName)
+		log.Info().Str("sid", string(sid)).Str("from_room", string(RoomName)).Msg("kicked from room")
 	}
 	if session, ok := o.Registry.GetSession(sid); ok {
 		room := o.Rooms.GetOrCreate(roomName)
 		room.AddMember(sid, session)
 		o.Registry.UpdateRoom(sid, roomName)
-		log.Printf("%s added to room %s\n", sid, roomName)
+		log.Info().Str("sid", string(sid)).Str("room", string(roomName)).Msg("added to room")
 	}
 }
 
