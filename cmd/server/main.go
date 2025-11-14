@@ -36,10 +36,13 @@ func main() {
 	manager := app.NewRoomManager()
 	policy := app.SimplePolicy{}
 	reg := app.NewRegistry()
+	relays := app.NewRelayManager()
+
 	orch := &app.Orchestrator{
 		Registry: reg,
 		Rooms:    manager,
 		Policy:   policy,
+		Relays:   relays,
 	}
 
 	r := adapters.SetupRouter(ctx, cfg, orch)
