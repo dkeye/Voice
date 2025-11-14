@@ -13,6 +13,9 @@ type WebRTCConnection struct {
 	sid    core.SessionID
 	onICE  func(webrtc.ICECandidateInit)
 	cancel context.CancelFunc
+
+	onTrack  func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)
+	onClosed (func())
 }
 
 func defaultWebRTCConfig() webrtc.Configuration {
@@ -40,7 +43,8 @@ func (c *WebRTCConnection) Start(ctx context.Context) error {
 	c.pc.OnICEConnectionStateChange(func(s webrtc.ICEConnectionState) {
 		log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Str("ice_state", s.String()).Msg("ICE state")
 		if s == webrtc.ICEConnectionStateDisconnected ||
-			s == webrtc.ICEConnectionStateFailed {
+			s == webrtc.ICEConnectionStateFailed ||
+			s == webrtc.ICEConnectionStateClosed {
 			cancel()
 		}
 	})
@@ -48,6 +52,19 @@ func (c *WebRTCConnection) Start(ctx context.Context) error {
 	c.pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand != nil && c.onICE != nil {
 			c.onICE(cand.ToJSON())
+		}
+	})
+
+	c.pc.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		log.Info().
+			Str("module", "webrtc").
+			Str("sid", string(c.sid)).
+			Str("kind", track.Kind().String()).
+			Str("track_id", track.ID()).
+			Str("stream_id", track.StreamID()).
+			Msg("OnTrack received")
+		if c.onTrack != nil {
+			c.onTrack(ctx, track, receiver)
 		}
 	})
 
@@ -83,6 +100,9 @@ func (c *WebRTCConnection) Close() {
 			log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Msg("closed")
 		}
 	}
+	if c.onClosed != nil {
+		c.onClosed()
+	}
 }
 
 func (c *WebRTCConnection) AddICECandidate(ci webrtc.ICECandidateInit) error {
@@ -95,4 +115,21 @@ func (c *WebRTCConnection) LocalDescription() *webrtc.SessionDescription {
 
 func (c *WebRTCConnection) OnICECandidate(fn func(webrtc.ICECandidateInit)) {
 	c.onICE = fn
+}
+
+// OnTrack sets application-level callback for remote tracks.
+func (c *WebRTCConnection) OnTrack(fn func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)) {
+	c.onTrack = fn
+}
+
+// OnClosed sets application-level callback for cleanup tracks
+func (c *WebRTCConnection) OnClosed(fn func()) { c.onClosed = fn }
+
+// AddLocalTrack attaches a local static RTP track to the PeerConnection.
+func (c *WebRTCConnection) AddLocalTrack(track *webrtc.TrackLocalStaticRTP) (*webrtc.RTPSender, error) {
+	sender, err := c.pc.AddTrack(track)
+	if err != nil {
+		return nil, err
+	}
+	return sender, nil
 }

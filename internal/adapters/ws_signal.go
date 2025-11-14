@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -15,6 +16,8 @@ import (
 	"github.com/pion/webrtc/v4"
 	"github.com/rs/zerolog/log"
 )
+
+var ErrBackpressure = errors.New("backpressure")
 
 type SignalWSController struct {
 	Orch *app.Orchestrator
@@ -97,7 +100,7 @@ func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
 func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *wsSignalConn) {
 	defer func() {
 		log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump closing")
-		ctl.Orch.OnDisconnect(sid)
+		ctl.Orch.OnSignalDisconnect(sid)
 		c.Close()
 	}()
 
@@ -314,6 +317,14 @@ func (ctl *SignalWSController) handleOffer(
 
 	wc.OnICECandidate(func(ci webrtc.ICECandidateInit) {
 		ctl.sendCandidate(conn, ci)
+	})
+
+	wc.OnTrack(func(trackCtx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		ctl.Orch.OnTrack(trackCtx, sid, track)
+	})
+
+	wc.OnClosed(func() {
+		ctl.Orch.OnMediaDisconnect(sid)
 	})
 
 	if err = wc.Start(context.Background()); err != nil {
