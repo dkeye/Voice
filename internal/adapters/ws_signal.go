@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dkeye/Voice/internal/app"
+	"github.com/dkeye/Voice/internal/app/orch"
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/dkeye/Voice/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -20,7 +20,7 @@ import (
 var ErrBackpressure = errors.New("backpressure")
 
 type SignalWSController struct {
-	Orch *app.Orchestrator
+	Orch *orch.Orchestrator
 }
 
 type wsSignalConn struct {
@@ -100,7 +100,6 @@ func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
 func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *wsSignalConn) {
 	defer func() {
 		log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump closing")
-		ctl.Orch.OnSignalDisconnect(sid)
 		c.Close()
 	}()
 
@@ -319,13 +318,7 @@ func (ctl *SignalWSController) handleOffer(
 		ctl.sendCandidate(conn, ci)
 	})
 
-	wc.OnTrack(func(trackCtx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		ctl.Orch.OnTrack(trackCtx, sid, track)
-	})
-
-	wc.OnClosed(func() {
-		ctl.Orch.OnMediaDisconnect(sid)
-	})
+	ctl.Orch.BindMediaHandlers(wc, sid)
 
 	if err = wc.Start(context.Background()); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("webrtc start")

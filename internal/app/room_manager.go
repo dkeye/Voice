@@ -13,7 +13,7 @@ type RoomManagerImpl struct {
 	rooms map[domain.RoomName]core.RoomService
 }
 
-func NewRoomManager() core.RoomFactory {
+func NewRoomManager() core.RoomManager {
 	return &RoomManagerImpl{rooms: make(map[domain.RoomName]core.RoomService)}
 }
 

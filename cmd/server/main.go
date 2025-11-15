@@ -14,6 +14,8 @@ import (
 
 	"github.com/dkeye/Voice/internal/adapters"
 	"github.com/dkeye/Voice/internal/app"
+	"github.com/dkeye/Voice/internal/app/orch"
+	"github.com/dkeye/Voice/internal/app/sfu"
 	"github.com/dkeye/Voice/internal/config"
 )
 
@@ -36,9 +38,9 @@ func main() {
 	manager := app.NewRoomManager()
 	policy := app.SimplePolicy{}
 	reg := app.NewRegistry()
-	relays := app.NewRelayManager()
+	relays := sfu.NewRelayManager()
 
-	orch := &app.Orchestrator{
+	orch := &orch.Orchestrator{
 		Registry: reg,
 		Rooms:    manager,
 		Policy:   policy,
