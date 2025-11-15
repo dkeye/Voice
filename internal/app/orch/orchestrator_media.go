@@ -17,7 +17,8 @@ func (o *Orchestrator) BindMediaHandlers(mc core.MediaConnection, sid core.Sessi
 }
 
 func (o *Orchestrator) OnMediaDisconnect(sid core.SessionID) {
-	o.KickBySID(sid)
+	o.cleanupMedia(sid)
+	o.cleanupMembership(sid)
 	o.Registry.Unbind(sid)
 }
 

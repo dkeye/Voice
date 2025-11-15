@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/dkeye/Voice/internal/adapters"
+	router "github.com/dkeye/Voice/internal/adapters/http"
 	"github.com/dkeye/Voice/internal/app"
 	"github.com/dkeye/Voice/internal/app/orch"
 	"github.com/dkeye/Voice/internal/app/sfu"
@@ -47,7 +47,7 @@ func main() {
 		Relays:   relays,
 	}
 
-	r := adapters.SetupRouter(ctx, cfg, orch)
+	r := router.SetupRouter(ctx, cfg, orch)
 	addr := fmt.Sprintf(":%d", cfg.Port)
 
 	srv := &http.Server{
