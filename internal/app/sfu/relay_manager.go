@@ -1,9 +1,8 @@
-package app
+package sfu
 
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/pion/webrtc/v4"
@@ -29,11 +28,7 @@ func (m *RelayManager) StartRelay(ctx context.Context, sid core.SessionID, track
 		Logger()
 
 	relayCtx, cancel := context.WithCancel(ctx)
-	relay := &Relay{
-		Src:       track,
-		outTracks: make(map[core.SessionID]*OutTrack),
-		cancel:    cancel,
-	}
+	relay := NewRelay(track, cancel)
 
 	m.mu.Lock()
 	if old, ok := m.relays[sid]; ok {
@@ -59,15 +54,8 @@ func (m *RelayManager) AddSubscriber(srcSID, dstSID core.SessionID, localTrack *
 	if !ok {
 		return
 	}
-
-	ot := &OutTrack{
-		Track: localTrack,
-		State: TrackStateOk,
-	}
-
-	relay.mu.Lock()
-	defer relay.mu.Unlock()
-	relay.outTracks[dstSID] = ot
+	ot := NewOutTrack(localTrack)
+	relay.AddOutTrack(dstSID, ot)
 }
 
 // MarkSubscriberDelete marks subscriber's OutTrack as TrackStateDelete.
@@ -85,7 +73,7 @@ func (m *RelayManager) MarkSubscriberDelete(srcSID, dstSID core.SessionID) {
 	if !ok {
 		return
 	}
-	atomic.StoreInt32(&ot.State, TrackStateDelete)
+	ot.MarkDelete()
 }
 
 // StopRelay stops a relay and removes it from the manager.

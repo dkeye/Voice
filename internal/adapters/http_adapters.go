@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 
-	"github.com/dkeye/Voice/internal/app"
+	"github.com/dkeye/Voice/internal/app/orch"
 	"github.com/dkeye/Voice/internal/config"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -31,7 +31,7 @@ func ClientTokenMiddleware() gin.HandlerFunc {
 	}
 }
 
-func SetupRouter(ctx context.Context, cfg *config.Config, orch *app.Orchestrator) *gin.Engine {
+func SetupRouter(ctx context.Context, cfg *config.Config, orch *orch.Orchestrator) *gin.Engine {
 	if cfg.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}

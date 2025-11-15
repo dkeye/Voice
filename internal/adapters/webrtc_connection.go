@@ -49,6 +49,16 @@ func (c *WebRTCConnection) Start(ctx context.Context) error {
 		}
 	})
 
+	c.pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Str("peer_connection_state", s.String()).Msg("Peer state")
+		if s == webrtc.PeerConnectionStateFailed ||
+			s == webrtc.PeerConnectionStateClosed {
+			if c.onClosed != nil {
+				c.onClosed()
+			}
+		}
+	})
+
 	c.pc.OnICECandidate(func(cand *webrtc.ICECandidate) {
 		if cand != nil && c.onICE != nil {
 			c.onICE(cand.ToJSON())
