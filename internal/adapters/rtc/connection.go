@@ -1,4 +1,4 @@
-package adapters
+package rtc
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type WebRTCConnection struct {
 	onClosed (func())
 }
 
-func defaultWebRTCConfig() webrtc.Configuration {
+func DefaultWebRTCConfig() webrtc.Configuration {
 	return webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{

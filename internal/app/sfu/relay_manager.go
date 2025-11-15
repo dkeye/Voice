@@ -90,14 +90,6 @@ func (m *RelayManager) StopRelay(srcSID core.SessionID) {
 	relay.markAllDelete()
 }
 
-// HasRelay reports whether a relay exists for sid.
-func (m *RelayManager) HasRelay(sid core.SessionID) bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	_, ok := m.relays[sid]
-	return ok
-}
-
 // SrcTrack returns the source track for a given relay.
 func (m *RelayManager) SrcTrack(sid core.SessionID) (*webrtc.TrackRemote, bool) {
 	m.mu.RLock()

@@ -1,10 +1,11 @@
-package adapters
+package http
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 
+	"github.com/dkeye/Voice/internal/adapters/signal"
 	"github.com/dkeye/Voice/internal/app/orch"
 	"github.com/dkeye/Voice/internal/config"
 	"github.com/gin-contrib/sessions"
@@ -56,7 +57,7 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *orch.Orchestrato
 	api := r.Group("/api")
 
 	api.GET("/ws/signal", func(c *gin.Context) {
-		ctrl := &SignalWSController{
+		ctrl := &signal.SignalWSController{
 			Orch: orch,
 		}
 		log.Info().Str("module", "adapters.http").Str("sid", c.GetString("client_token")).Msg("ws signal endpoint hit")
