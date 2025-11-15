@@ -2,6 +2,7 @@ package rtc
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/pion/webrtc/v4"
@@ -16,6 +17,8 @@ type WebRTCConnection struct {
 
 	onTrack  func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)
 	onClosed (func())
+
+	once sync.Once
 }
 
 func DefaultWebRTCConfig() webrtc.Configuration {
@@ -36,7 +39,7 @@ func NewWebRTCConnection(cfg webrtc.Configuration, sid core.SessionID) (*WebRTCC
 	return &WebRTCConnection{pc: pc, sid: sid}, nil
 }
 
-func (c *WebRTCConnection) Start(ctx context.Context) error {
+func (c *WebRTCConnection) Start(ctx context.Context) error { // checked
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
@@ -53,9 +56,7 @@ func (c *WebRTCConnection) Start(ctx context.Context) error {
 		log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Str("peer_connection_state", s.String()).Msg("Peer state")
 		if s == webrtc.PeerConnectionStateFailed ||
 			s == webrtc.PeerConnectionStateClosed {
-			if c.onClosed != nil {
-				c.onClosed()
-			}
+			c.Close()
 		}
 	})
 
@@ -99,20 +100,22 @@ func (c *WebRTCConnection) ApplyOfferAndCreateAnswer(offer webrtc.SessionDescrip
 	return c.pc.LocalDescription(), nil
 }
 
-func (c *WebRTCConnection) Close() {
-	if c.cancel != nil {
-		c.cancel()
-	}
-	if c.pc != nil {
-		if err := c.pc.Close(); err != nil {
-			log.Error().Err(err).Str("module", "webrtc").Str("sid", string(c.sid)).Msg("close error")
-		} else {
-			log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Msg("closed")
+func (c *WebRTCConnection) Close() { // checked
+	c.once.Do(func() {
+		if c.cancel != nil {
+			c.cancel()
 		}
-	}
-	if c.onClosed != nil {
-		c.onClosed()
-	}
+		if c.pc != nil {
+			if err := c.pc.Close(); err != nil {
+				log.Error().Err(err).Str("module", "webrtc").Str("sid", string(c.sid)).Msg("close error")
+			} else {
+				log.Info().Str("module", "webrtc").Str("sid", string(c.sid)).Msg("closed")
+			}
+		}
+		if c.onClosed != nil {
+			c.onClosed()
+		}
+	})
 }
 
 func (c *WebRTCConnection) AddICECandidate(ci webrtc.ICECandidateInit) error {

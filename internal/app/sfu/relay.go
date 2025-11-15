@@ -29,7 +29,7 @@ func NewRelay(src *webrtc.TrackRemote, cancel context.CancelFunc) *Relay {
 }
 
 // loop reads RTP packets from the source track and forwards them to all OutTracks.
-func (r *Relay) loop(ctx context.Context, _ core.SessionID, logger *zerolog.Logger) {
+func (r *Relay) loop(ctx context.Context, _ core.SessionID, logger *zerolog.Logger) { // checked
 	for {
 		select {
 		case <-ctx.Done():
@@ -48,7 +48,7 @@ func (r *Relay) loop(ctx context.Context, _ core.SessionID, logger *zerolog.Logg
 	}
 }
 
-func (r *Relay) forward(pkt *rtp.Packet, logger *zerolog.Logger) {
+func (r *Relay) forward(pkt *rtp.Packet, logger *zerolog.Logger) { // checked
 	snapshot := make(map[core.SessionID]*OutTrack, len(r.outTracks))
 	r.mu.RLock()
 	maps.Copy(snapshot, r.outTracks)
@@ -78,7 +78,7 @@ func (r *Relay) forward(pkt *rtp.Packet, logger *zerolog.Logger) {
 	}
 }
 
-func (r *Relay) cleanupDeleted(dirty []core.SessionID) {
+func (r *Relay) cleanupDeleted(dirty []core.SessionID) { // checked
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, sid := range dirty {
