@@ -12,7 +12,6 @@ import (
 type sessionEntry struct {
 	RoomName domain.RoomName
 	Session  core.MemberSession
-	Cancel   context.CancelFunc
 }
 
 type Registry struct {
@@ -49,26 +48,10 @@ func (r *Registry) UpdateUsername(sid core.SessionID, name string) {
 	}
 }
 
-func (r *Registry) BindSession(
-	sid core.SessionID,
-	roomName domain.RoomName,
-	sess core.MemberSession,
-	cancel context.CancelFunc,
-) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.sessions[sid] = &sessionEntry{
-		RoomName: roomName,
-		Session:  sess,
-		Cancel:   cancel,
-	}
-	log.Info().Str("module", "app.registry").Str("sid", string(sid)).Str("room", string(roomName)).Msg("bound session")
-}
-
 func (r *Registry) BindSignal(sid core.SessionID, sess core.MemberSession, cancel context.CancelFunc) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.sessions[sid] = &sessionEntry{Session: sess, Cancel: cancel}
+	r.sessions[sid] = &sessionEntry{Session: sess}
 	log.Info().Str("module", "app.registry").Str("sid", string(sid)).Msg("bound signal")
 }
 
@@ -134,18 +117,4 @@ func (r *Registry) MembersOfRoom(name domain.RoomName) []regSnap {
 		}
 	}
 	return out
-}
-
-func (r *Registry) Cancel(sid core.SessionID) bool {
-	r.mu.RLock()
-	e, ok := r.sessions[sid]
-	r.mu.RUnlock()
-	if !ok {
-		return false
-	}
-	if e.Cancel != nil {
-		e.Cancel()
-	}
-	log.Info().Str("module", "app.registry").Str("sid", string(sid)).Msg("canceled session")
-	return true
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
+func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) { // checked
 	for {
 		select {
 		case <-ctx.Done():
@@ -33,7 +33,7 @@ func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
 	}
 }
 
-func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *wsSignalConn) {
+func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *wsSignalConn) { // checked
 	defer func() {
 		log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump closing")
 		c.Close()

@@ -46,7 +46,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context) {
+func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context) { // checked
 	sid := core.SessionID(c.GetString("client_token"))
 	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("new WS connection")
 

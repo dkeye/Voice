@@ -21,7 +21,7 @@ func NewRelayManager() *RelayManager {
 }
 
 // StartRelay creates a new Relay for the given speaker SID and starts its loop.
-func (m *RelayManager) StartRelay(ctx context.Context, sid core.SessionID, track *webrtc.TrackRemote) {
+func (m *RelayManager) StartRelay(ctx context.Context, sid core.SessionID, track *webrtc.TrackRemote) { // checked
 	logger := log.With().
 		Str("module", "relay").
 		Str("sid", string(sid)).
@@ -58,6 +58,41 @@ func (m *RelayManager) AddSubscriber(srcSID, dstSID core.SessionID, localTrack *
 	relay.AddOutTrack(dstSID, ot)
 }
 
+func (m *RelayManager) Subscribe(srcSID, dstSID core.SessionID, pc core.MediaConnection, srcTrack *webrtc.TrackRemote) error {
+	localTrack, err := webrtc.NewTrackLocalStaticRTP(
+		srcTrack.Codec().RTPCodecCapability,
+		srcTrack.ID(),
+		srcTrack.StreamID(),
+	)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("module", "sfu").
+			Str("src_sid", string(srcSID)).
+			Str("dst_sid", string(dstSID)).
+			Msg("create local track")
+		return err
+	}
+
+	if _, err := pc.AddLocalTrack(localTrack); err != nil {
+		log.Error().
+			Err(err).
+			Str("module", "sfu").
+			Str("src_sid", string(srcSID)).
+			Str("dst_sid", string(dstSID)).
+			Msg("add local track to peerconnection")
+		return err
+	}
+
+	m.AddSubscriber(srcSID, dstSID, localTrack)
+	log.Info().
+		Str("module", "sfu").
+		Str("src_sid", string(srcSID)).
+		Str("dst_sid", string(dstSID)).
+		Msg("subscriber added to relay")
+	return nil
+}
+
 // MarkSubscriberDelete marks subscriber's OutTrack as TrackStateDelete.
 func (m *RelayManager) MarkSubscriberDelete(srcSID, dstSID core.SessionID) {
 	m.mu.RLock()
@@ -77,7 +112,7 @@ func (m *RelayManager) MarkSubscriberDelete(srcSID, dstSID core.SessionID) {
 }
 
 // StopRelay stops a relay and removes it from the manager.
-func (m *RelayManager) StopRelay(srcSID core.SessionID) {
+func (m *RelayManager) StopRelay(srcSID core.SessionID) {  // checked
 	m.mu.Lock()
 	relay, ok := m.relays[srcSID]
 	if ok {
@@ -87,7 +122,15 @@ func (m *RelayManager) StopRelay(srcSID core.SessionID) {
 	if !ok {
 		return
 	}
+	relay.cancel()
 	relay.markAllDelete()
+}
+
+func (m *RelayManager) HasRelay(sid core.SessionID) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.relays[sid]
+	return ok
 }
 
 // SrcTrack returns the source track for a given relay.
