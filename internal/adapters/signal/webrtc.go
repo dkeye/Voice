@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (ctl *SignalWSController) sendCandidate(c *wsSignalConn, ci webrtc.ICECandidateInit) {
+func (ctl *SignalWSController) sendCandidate(c *WsSignalConn, ci webrtc.ICECandidateInit) {
 	resp := struct {
 		Type          string `json:"type"`
 		Candidate     string `json:"candidate"`
@@ -31,7 +31,7 @@ func (ctl *SignalWSController) sendCandidate(c *wsSignalConn, ci webrtc.ICECandi
 
 func (ctl *SignalWSController) handleOffer(
 	sid core.SessionID,
-	conn *wsSignalConn,
+	conn *WsSignalConn,
 	data []byte,
 ) {
 	type offerPayload struct {
@@ -50,6 +50,9 @@ func (ctl *SignalWSController) handleOffer(
 		log.Error().Err(err).Str("module", "signal").Msg("webrtc new pc")
 		return
 	}
+	wc.OnNegotiationNeeded(func() {
+		ctl.handleNegotiationNeeded(sid, conn, wc)
+	})
 
 	wc.OnICECandidate(func(ci webrtc.ICECandidateInit) {
 		ctl.sendCandidate(conn, ci)
@@ -68,9 +71,15 @@ func (ctl *SignalWSController) handleOffer(
 		SDP:  p.SDP,
 	}
 
-	answer, err := wc.ApplyOfferAndCreateAnswer(offer)
-	if err != nil {
+	if err = wc.ApplyOffer(offer); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("webrtc apply offer")
+		wc.Close()
+		return
+	}
+
+	answer, err := wc.CreateAndSetAnswer()
+	if err != nil {
+		log.Error().Err(err).Str("module", "signal").Msg("webrtc create/set answer")
 		wc.Close()
 		return
 	}
@@ -86,9 +95,45 @@ func (ctl *SignalWSController) handleOffer(
 	})
 }
 
+func (ctl *SignalWSController) handleAnswer(
+	sid core.SessionID,
+	_ *WsSignalConn,
+	data []byte,
+) {
+	type answerPayload struct {
+		Type string `json:"type"`
+		SDP  string `json:"sdp"`
+	}
+	var p answerPayload
+	if err := json.Unmarshal(data, &p); err != nil {
+		log.Error().Err(err).Msg("bad answer payload")
+		return
+	}
+
+	sess, ok := ctl.Orch.Registry.GetSession(sid)
+	if !ok {
+		return
+	}
+
+	mc := sess.Media()
+	if mc == nil {
+		return
+	}
+
+	answer := webrtc.SessionDescription{
+		Type: webrtc.SDPTypeAnswer,
+		SDP:  p.SDP,
+	}
+
+	if err := mc.ApplyAnswer(answer); err != nil {
+		log.Error().Err(err).Msg("set remote answer")
+		return
+	}
+}
+
 func (ctl *SignalWSController) handleCandidate(
 	sid core.SessionID,
-	_ *wsSignalConn,
+	_ *WsSignalConn,
 	data []byte,
 ) {
 	type candidatePayload struct {
@@ -100,6 +145,10 @@ func (ctl *SignalWSController) handleCandidate(
 	var p candidatePayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("bad candidate payload")
+		return
+	}
+	if p.Candidate == "" {
+		log.Debug().Str("module", "signal").Str("sid", string(sid)).Msg("end-of-candidates")
 		return
 	}
 
@@ -124,4 +173,21 @@ func (ctl *SignalWSController) handleCandidate(
 	if err := mc.AddICECandidate(cand); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("add ice candidate")
 	}
+}
+
+func (ctl *SignalWSController) handleNegotiationNeeded(
+	sid core.SessionID,
+	conn *WsSignalConn,
+	mc core.MediaConnection,
+) {
+	offer, err := mc.CreateAndSetOffer()
+	if err != nil {
+		log.Error().Err(err).Msg("negotiation offer failed")
+		return
+	}
+
+	ctl.sendJSON(conn, map[string]string{
+		"type": "offer",
+		"sdp":  offer.SDP,
+	})
 }

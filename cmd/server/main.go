@@ -40,12 +40,7 @@ func main() {
 	reg := app.NewRegistry()
 	relays := sfu.NewRelayManager()
 
-	orch := &orch.Orchestrator{
-		Registry: reg,
-		Rooms:    manager,
-		Policy:   policy,
-		Relays:   relays,
-	}
+	orch := orch.NewOrchestrator(reg, manager, policy, relays)
 
 	r := router.SetupRouter(ctx, cfg, orch)
 	addr := fmt.Sprintf(":%d", cfg.Port)

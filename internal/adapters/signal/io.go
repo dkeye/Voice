@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) { // checked
+func (ctl *SignalWSController) writePump(ctx context.Context, c *WsSignalConn) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -33,7 +33,7 @@ func (ctl *SignalWSController) writePump(ctx context.Context, c *wsSignalConn) {
 	}
 }
 
-func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *wsSignalConn) { // checked
+func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID, c *WsSignalConn) {
 	defer func() {
 		log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump closing")
 		c.Close()
@@ -55,7 +55,7 @@ func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID,
 	}
 }
 
-func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *wsSignalConn, data []byte) {
+func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *WsSignalConn, data []byte) {
 	var env struct {
 		Type string `json:"type"`
 	}
@@ -77,6 +77,8 @@ func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *wsSignalConn,
 		ctl.handleWhoAmI(sid, c)
 	case "offer":
 		ctl.handleOffer(sid, c, data)
+	case "answer":
+		ctl.handleAnswer(sid, c, data)
 	case "candidate":
 		ctl.handleCandidate(sid, c, data)
 	default:
@@ -84,7 +86,7 @@ func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *wsSignalConn,
 	}
 }
 
-func (ctl *SignalWSController) sendJSON(c *wsSignalConn, v any) {
+func (ctl *SignalWSController) sendJSON(c *WsSignalConn, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("sendJSON marshal")

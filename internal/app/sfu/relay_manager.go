@@ -21,7 +21,7 @@ func NewRelayManager() *RelayManager {
 }
 
 // StartRelay creates a new Relay for the given speaker SID and starts its loop.
-func (m *RelayManager) StartRelay(ctx context.Context, sid core.SessionID, track *webrtc.TrackRemote) { // checked
+func (m *RelayManager) StartRelay(ctx context.Context, sid core.SessionID, track *webrtc.TrackRemote) {
 	logger := log.With().
 		Str("module", "relay").
 		Str("sid", string(sid)).
@@ -112,7 +112,7 @@ func (m *RelayManager) MarkSubscriberDelete(srcSID, dstSID core.SessionID) {
 }
 
 // StopRelay stops a relay and removes it from the manager.
-func (m *RelayManager) StopRelay(srcSID core.SessionID) {  // checked
+func (m *RelayManager) StopRelay(srcSID core.SessionID) {
 	m.mu.Lock()
 	relay, ok := m.relays[srcSID]
 	if ok {
