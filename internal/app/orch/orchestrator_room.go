@@ -6,7 +6,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName) { // checked
+func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName) {
 	RoomName, _, ok := o.Registry.RoomOf(sid)
 	if ok {
 		log.Info().Str("sid", string(sid)).Str("roomName", string(RoomName)).Msg("already in room")
@@ -59,12 +59,12 @@ func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName) { // c
 // 	return ok
 // }
 
-func (o *Orchestrator) KickBySID(sid core.SessionID) { // checked
+func (o *Orchestrator) KickBySID(sid core.SessionID) {
 	o.cleanupMedia(sid)
 	o.cleanupMembership(sid)
 }
 
-func (o *Orchestrator) cleanupMembership(sid core.SessionID) { // checked
+func (o *Orchestrator) cleanupMembership(sid core.SessionID) {
 	roomName, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
@@ -74,7 +74,7 @@ func (o *Orchestrator) cleanupMembership(sid core.SessionID) { // checked
 	o.Registry.RemoveRoom(sid)
 }
 
-func (o *Orchestrator) EvictRoom(name domain.RoomName) { // checked
+func (o *Orchestrator) EvictRoom(name domain.RoomName) {
 	for _, snap := range o.Registry.MembersOfRoom(name) {
 		o.KickBySID(snap.SID)
 	}

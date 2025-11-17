@@ -15,8 +15,11 @@ type WebRTCConnection struct {
 	onICE  func(webrtc.ICECandidateInit)
 	cancel context.CancelFunc
 
-	onTrack  func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)
-	onClosed (func())
+	onTrack             func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)
+	onNegotiationNeeded (func())
+	onClosed            (func())
+
+	renegotiateMu sync.Mutex
 
 	once sync.Once
 }
@@ -25,7 +28,10 @@ func DefaultWebRTCConfig() webrtc.Configuration {
 	return webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
-				URLs: []string{"stun:stun.l.google.com:19302"},
+				URLs: []string{
+					"stun:stun.l.google.com:19302",
+					"stun:stun.cloudflare.com:3478",
+				},
 			},
 		},
 	}
@@ -39,7 +45,7 @@ func NewWebRTCConnection(cfg webrtc.Configuration, sid core.SessionID) (*WebRTCC
 	return &WebRTCConnection{pc: pc, sid: sid}, nil
 }
 
-func (c *WebRTCConnection) Start(ctx context.Context) error { // checked
+func (c *WebRTCConnection) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
 
@@ -79,13 +85,26 @@ func (c *WebRTCConnection) Start(ctx context.Context) error { // checked
 		}
 	})
 
+	c.pc.OnNegotiationNeeded(func() {
+		if c.onNegotiationNeeded != nil {
+			c.renegotiateMu.Lock()
+			defer c.renegotiateMu.Unlock()
+			c.onNegotiationNeeded()
+		}
+	})
+
 	return nil
 }
 
-func (c *WebRTCConnection) ApplyOfferAndCreateAnswer(offer webrtc.SessionDescription) (*webrtc.SessionDescription, error) {
-	if err := c.pc.SetRemoteDescription(offer); err != nil {
-		return nil, err
-	}
+func (c *WebRTCConnection) ApplyOffer(offer webrtc.SessionDescription) error {
+	return c.pc.SetRemoteDescription(offer)
+}
+
+func (c *WebRTCConnection) ApplyAnswer(answer webrtc.SessionDescription) error {
+	return c.pc.SetRemoteDescription(answer)
+}
+
+func (c *WebRTCConnection) CreateAndSetAnswer() (*webrtc.SessionDescription, error) {
 	answer, err := c.pc.CreateAnswer(nil)
 	if err != nil {
 		return nil, err
@@ -100,7 +119,22 @@ func (c *WebRTCConnection) ApplyOfferAndCreateAnswer(offer webrtc.SessionDescrip
 	return c.pc.LocalDescription(), nil
 }
 
-func (c *WebRTCConnection) Close() { // checked
+func (c *WebRTCConnection) CreateAndSetOffer() (*webrtc.SessionDescription, error) {
+	offer, err := c.pc.CreateOffer(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	gatherComplete := webrtc.GatheringCompletePromise(c.pc)
+	if err := c.pc.SetLocalDescription(offer); err != nil {
+		return nil, err
+	}
+	<-gatherComplete
+
+	return c.pc.LocalDescription(), nil
+}
+
+func (c *WebRTCConnection) Close() {
 	c.once.Do(func() {
 		if c.cancel != nil {
 			c.cancel()
@@ -122,10 +156,6 @@ func (c *WebRTCConnection) AddICECandidate(ci webrtc.ICECandidateInit) error {
 	return c.pc.AddICECandidate(ci)
 }
 
-func (c *WebRTCConnection) LocalDescription() *webrtc.SessionDescription {
-	return c.pc.LocalDescription()
-}
-
 func (c *WebRTCConnection) OnICECandidate(fn func(webrtc.ICECandidateInit)) {
 	c.onICE = fn
 }
@@ -133,6 +163,10 @@ func (c *WebRTCConnection) OnICECandidate(fn func(webrtc.ICECandidateInit)) {
 // OnTrack sets application-level callback for remote tracks.
 func (c *WebRTCConnection) OnTrack(fn func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)) {
 	c.onTrack = fn
+}
+
+func (c *WebRTCConnection) OnNegotiationNeeded(fn func()) {
+	c.onNegotiationNeeded = fn
 }
 
 // OnClosed sets application-level callback for cleanup tracks
