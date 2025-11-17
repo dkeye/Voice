@@ -13,6 +13,21 @@ type Orchestrator struct {
 	Relays   *sfu.RelayManager
 }
 
+func NewOrchestrator(
+	registry *app.Registry,
+	roomsManager core.RoomManager,
+	policy app.Policy,
+	relayManager *sfu.RelayManager,
+) *Orchestrator {
+	o := &Orchestrator{
+		Registry: registry,
+		Rooms:    roomsManager,
+		Policy:   policy,
+		Relays:   relayManager,
+	}
+	return o
+}
+
 func (o *Orchestrator) OnFrame(sid core.SessionID, data core.Frame) {
 	roomName, _, ok := o.Registry.RoomOf(sid)
 	if !ok {

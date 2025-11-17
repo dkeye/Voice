@@ -10,7 +10,7 @@ import (
 
 func (ctl *SignalWSController) handleJoin(
 	sid core.SessionID,
-	conn *wsSignalConn,
+	conn *WsSignalConn,
 	data []byte,
 ) {
 	type joinPayload struct {
@@ -56,7 +56,7 @@ func (ctl *SignalWSController) handleJoin(
 // handleLeave — выход из текущей комнаты, соединение при этом не рвётся.
 func (ctl *SignalWSController) handleLeave(
 	sid core.SessionID,
-	conn *wsSignalConn,
+	conn *WsSignalConn,
 ) {
 	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("leave")
 	ctl.Orch.KickBySID(sid)
@@ -66,7 +66,7 @@ func (ctl *SignalWSController) handleLeave(
 }
 
 func (ctl *SignalWSController) handlePing(
-	conn *wsSignalConn,
+	conn *WsSignalConn,
 ) {
 	resp := struct {
 		Type string `json:"type"`
@@ -78,7 +78,7 @@ func (ctl *SignalWSController) handlePing(
 
 func (ctl *SignalWSController) handleRename(
 	sid core.SessionID,
-	conn *wsSignalConn,
+	conn *WsSignalConn,
 	data []byte,
 ) {
 	type renamePayload struct {
@@ -105,7 +105,7 @@ func (ctl *SignalWSController) handleRename(
 
 func (ctl *SignalWSController) handleWhoAmI(
 	sid core.SessionID,
-	conn *wsSignalConn,
+	conn *WsSignalConn,
 ) {
 	user := ctl.Orch.Registry.GetOrCreateUser(sid)
 	roomName, _, ok := ctl.Orch.Registry.RoomOf(sid)

@@ -14,7 +14,8 @@ type MediaConnection interface {
 	// AddICECandidate applies a remote ICE candidate.
 	AddICECandidate(webrtc.ICECandidateInit) error
 	// LocalDescription returns the current local SDP.
-	LocalDescription() *webrtc.SessionDescription
+	ApplyAnswer(webrtc.SessionDescription) error
+	CreateAndSetOffer() (*webrtc.SessionDescription, error)
 	// OnICECandidate sets a callback for newly gathered local ICE candidates.
 	OnICECandidate(func(webrtc.ICECandidateInit))
 	// OnTrack sets a callback that will be invoked when a new remote track arrives.

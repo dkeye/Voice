@@ -19,7 +19,7 @@ func (o *Orchestrator) OnMediaDisconnect(sid core.SessionID) {
 	o.cleanupMedia(sid)
 }
 
-func (o *Orchestrator) cleanupMedia(sid core.SessionID) { // checked
+func (o *Orchestrator) cleanupMedia(sid core.SessionID) {
 	if o.Relays != nil {
 		o.Relays.StopRelay(sid)
 
@@ -39,7 +39,7 @@ func (o *Orchestrator) cleanupMedia(sid core.SessionID) { // checked
 }
 
 // OnTrack is called when a new remote media track appears for a given session.
-func (o *Orchestrator) OnTrack(ctx context.Context, sid core.SessionID, track *webrtc.TrackRemote) { // checked
+func (o *Orchestrator) OnTrack(ctx context.Context, sid core.SessionID, track *webrtc.TrackRemote) {
 	if o.Relays == nil {
 		return
 	}
@@ -62,17 +62,25 @@ func (o *Orchestrator) OnTrack(ctx context.Context, sid core.SessionID, track *w
 		if snap.SID == sid {
 			continue
 		}
-		pc := snap.Session.Media()
-		if pc == nil {
+		mc := snap.Session.Media()
+		if mc == nil {
 			continue
 		}
-		o.Relays.Subscribe(sid, snap.SID, pc, track)
+		if err := o.Relays.Subscribe(sid, snap.SID, mc, track); err != nil {
+			log.Error().
+				Err(err).
+				Str("module", "sfu").
+				Str("src_sid", string(sid)).
+				Str("dst_sid", string(snap.SID)).
+				Msg("Subscribe in OnTrack failed")
+			continue
+		}
 	}
 }
 
 // OnMediaReady is called when MediaConnection is attached to the session (offer/answer done).
 // It subscribes this user as a subscriber to all existing relays in the same room.
-func (o *Orchestrator) OnMediaReady(sid core.SessionID) { // checked
+func (o *Orchestrator) OnMediaReady(sid core.SessionID) {
 	if o.Relays == nil {
 		return
 	}
@@ -95,10 +103,19 @@ func (o *Orchestrator) OnMediaReady(sid core.SessionID) { // checked
 		if snap.SID == sid {
 			continue
 		}
-		srcTrack, ok := o.Relays.SrcTrack(snap.SID)
+		track, ok := o.Relays.SrcTrack(snap.SID)
 		if !ok {
 			continue
 		}
-		o.Relays.Subscribe(snap.SID, sid, mc, srcTrack)
+		if err := o.Relays.Subscribe(snap.SID, sid, mc, track); err != nil {
+			log.Error().
+				Err(err).
+				Str("module", "sfu").
+				Str("src_sid", string(sid)).
+				Str("dst_sid", string(snap.SID)).
+				Msg("Subscribe in OnMediaReady failed")
+			continue
+		}
+
 	}
 }

@@ -17,16 +17,27 @@ import (
 var ErrBackpressure = errors.New("backpressure")
 
 type SignalWSController struct {
-	Orch *orch.Orchestrator
+	Orch        *orch.Orchestrator
+	mu          sync.RWMutex
+	connections map[core.SessionID]*WsSignalConn
 }
 
-type wsSignalConn struct {
+func NewSignalWSController(orch orch.Orchestrator) *SignalWSController {
+	return &SignalWSController{
+		Orch:        &orch,
+		connections: make(map[core.SessionID]*WsSignalConn),
+	}
+}
+
+type WsSignalConn struct {
 	conn *websocket.Conn
 	send chan core.Frame
 	once sync.Once
+
+	renegotiateMu sync.Mutex
 }
 
-func (c *wsSignalConn) TrySend(f core.Frame) error {
+func (c *WsSignalConn) TrySend(f core.Frame) error {
 	select {
 	case c.send <- f:
 		return nil
@@ -35,7 +46,7 @@ func (c *wsSignalConn) TrySend(f core.Frame) error {
 	}
 }
 
-func (c *wsSignalConn) Close() {
+func (c *WsSignalConn) Close() {
 	c.once.Do(func() {
 		close(c.send)
 		_ = c.conn.Close()
@@ -46,7 +57,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context) { // checked
+func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context) {
 	sid := core.SessionID(c.GetString("client_token"))
 	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("new WS connection")
 
@@ -56,10 +67,13 @@ func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context)
 		return
 	}
 
-	conn := &wsSignalConn{
+	conn := &WsSignalConn{
 		conn: ws,
 		send: make(chan core.Frame, 32),
 	}
+	ctl.mu.Lock()
+	ctl.connections[sid] = conn
+	ctl.mu.Unlock()
 
 	user := ctl.Orch.Registry.GetOrCreateUser(sid)
 	meta := domain.NewMember(user)
