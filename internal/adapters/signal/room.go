@@ -23,6 +23,16 @@ func (ctl *SignalWSController) createRoom(
 			return
 		}
 	}
+	user, _ := ctl.Orch.Registry.GetOrCreateUser(sid)
+	uid := user.ID
+
+	if !ctl.roomLimiter.Allow(uid) {
+		ctl.sendJSON(conn, map[string]any{
+			"type":  "error",
+			"error": "rate_limited",
+		})
+		return
+	}
 	type Payload struct {
 		Type string `json:"type"`
 		Name string `json:"name"`
