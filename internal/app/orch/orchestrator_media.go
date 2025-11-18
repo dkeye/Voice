@@ -31,6 +31,7 @@ func (o *Orchestrator) cleanupMedia(sid core.SessionID) {
 	if sess, ok := o.Registry.GetSession(sid); ok {
 		if mc := sess.Media(); mc != nil {
 			mc.Close()
+			sess.UpdateMedia(nil)
 		}
 	}
 }
@@ -60,7 +61,7 @@ func (o *Orchestrator) OnTrack(ctx context.Context, sid core.SessionID, track *w
 			continue
 		}
 		mc := snap.Session.Media()
-		if mc == nil {
+		if mc == nil || mc.IsClosed() {
 			continue
 		}
 		if err := o.Relays.Subscribe(sid, snap.SID, mc, track); err != nil {
@@ -92,7 +93,7 @@ func (o *Orchestrator) OnMediaReady(sid core.SessionID) {
 		return
 	}
 	mc := sess.Media()
-	if mc == nil {
+	if mc == nil || mc.IsClosed() {
 		return
 	}
 
