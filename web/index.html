@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8" />
-  <title>Voice — Client</title>
+  <title>Voice — Private Rooms</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light dark" />
   <link rel="stylesheet" href="/static/style.css">
@@ -12,43 +12,80 @@
 <body>
   <header>
     <h1>🎧 Voice</h1>
-    <span class="pill">WS: <span id="wsState" class="mono">idle</span></span>
-    <span class="pill">Room: <span id="roomBadge" class="mono">main</span></span>
+
+    <span class="pill">
+      WS: <span id="wsState" class="mono">connecting...</span>
+    </span>
+
+    <span class="pill">
+      Room: <span id="roomBadge" class="mono">—</span>
+    </span>
+
+    <span class="pill">
+      <span id="pcHealthDot" class="health-dot"></span>
+      <span id="pcState" class="mono">PC: idle</span>
+    </span>
+
     <div class="spacer"></div>
-    <span class="pill">↑ <span id="txRate" class="mono">0 B/s</span> · ↓ <span id="rxRate" class="mono">0
-        B/s</span></span>
-    <span class="pill mono">(Σ ↑<span id="txTotal">0</span>, ↓<span id="rxTotal">0</span>)</span>
+
+    <span class="pill">
+      ↑ <span id="txRate" class="mono">0 B/s</span> ·
+      ↓ <span id="rxRate" class="mono">0 B/s</span>
+    </span>
+    <span class="pill mono">
+      (Σ ↑<span id="txTotal">0</span>, ↓<span id="rxTotal">0</span>)
+    </span>
   </header>
 
   <main>
-    <!-- LEFT: Discord-like voice channels (with nested members) -->
+    <!-- LEFT: current room + members -->
     <aside class="left">
-      <div class="section">VOICE CHANNELS</div>
-      <div id="rooms" class="rooms"></div>
-      <div id="roomsEmpty" class="section" style="display:none">Пока нет комнат…</div>
+      <div class="section">Current room</div>
+      <div class="room-card" id="roomInfo">
+        <div class="room-id-row">
+          <span class="label">Room ID:</span>
+          <input id="roomId" class="mono" placeholder="Not in a room yet" autocomplete="off">
+        </div>
+        <div class="room-actions">
+          <button id="createRoom" class="primary">Create room</button>
+          <button id="joinRoom">Join</button>
+          <button id="copyLink" title="Copy invite link">Copy link</button>
+        </div>
+      </div>
+
+      <div class="section">Participants</div>
+      <div id="members" class="members"></div>
+      <div id="membersEmpty" class="section" style="display:none;">No one in the room yet…</div>
     </aside>
 
     <!-- RIGHT: Controls + Log -->
     <aside class="right">
-      <div class="row" style="margin:6px 0 12px 0;">
-        <input id="userName" placeholder="Username" autocomplete="off">
-        <input id="roomInput" placeholder="Room (optional)" autocomplete="off">
-        <button id="connect" class="primary" disabled>Connect</button>
-        <button id="leave">Leave</button>
-        <button id="talk" disabled>🎙️ Push-to-Talk</button>
-        <label class="row" style="margin-right:auto;"><input type="checkbox" id="toggleMode"> Toggle</label>
-      </div>
       <div class="row">
-        <div class="section" style="padding:0">Журнал</div>
+        <label class="field">
+          <span class="label">Your name</span>
+          <input id="userName" placeholder="Optional, can be set later" autocomplete="off">
+        </label>
+        <button id="renameBtn">Rename</button>
+      </div>
+
+      <div class="row">
+        <button id="toggleMic" class="primary">Mic: On</button>
+        <button id="toggleSound">Sound: On</button>
+        <button id="reconnectVoice">Reconnect voice</button>
+        <button id="leaveRoom">Leave room</button>
+      </div>
+
+      <!-- Скрытый контейнер для remote audio -->
+      <div id="remoteAudio" hidden></div>
+
+      <div class="row">
+        <div class="section" style="padding:0">Log</div>
       </div>
       <pre id="log"></pre>
     </aside>
   </main>
 
-  <!-- Client modules -->
-  <script type="module" src="/static/net-stats.js"></script>
-  <script type="module" src="/static/api.js"></script>
-  <script type="module" src="/static/app.js"></script>
+  <!-- Client entrypoint -->
   <script type="module" src="/static/ui.js"></script>
 </body>
 
