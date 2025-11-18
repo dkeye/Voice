@@ -4,6 +4,7 @@ package domain
 // No transport or lifecycle logic here.
 type Member struct {
 	User *User
+	Mute bool
 	// role, mute, anon, etc. could go here later
 }
 
