@@ -2,8 +2,6 @@ package http
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 
 	"github.com/dkeye/Voice/internal/adapters/signal"
 	"github.com/dkeye/Voice/internal/app/orch"
@@ -11,13 +9,13 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 func genClientToken() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
+	idStr := uuid.NewString()
+	return idStr
 }
 
 func ClientTokenMiddleware() gin.HandlerFunc {

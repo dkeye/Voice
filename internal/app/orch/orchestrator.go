@@ -29,11 +29,14 @@ func NewOrchestrator(
 }
 
 func (o *Orchestrator) OnFrame(sid core.SessionID, data core.Frame) {
-	roomName, _, ok := o.Registry.RoomOf(sid)
+	roomID, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
 	}
-	room := o.Rooms.GetOrCreate(roomName)
+	room, ok := o.Rooms.GetRoom(roomID)
+	if !ok {
+		return
+	}
 
 	res := room.Broadcast(sid, data)
 	if o.Policy == nil {
@@ -42,7 +45,7 @@ func (o *Orchestrator) OnFrame(sid core.SessionID, data core.Frame) {
 	for _, slow := range res.Dropped {
 		switch o.Policy.OnBackPressure(room, slow) {
 		case app.KickMember:
-			for _, snap := range o.Registry.MembersOfRoom(roomName) {
+			for _, snap := range o.Registry.MembersOfRoom(roomID) {
 				if snap.Session == slow {
 					o.KickBySID(snap.SID)
 				}

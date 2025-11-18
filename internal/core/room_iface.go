@@ -29,12 +29,14 @@ type RoomService interface {
 }
 
 type RoomInfo struct {
+	ID          domain.RoomID   `json:"id"`
 	Name        domain.RoomName `json:"name"`
 	MemberCount int             `json:"client_count"`
 }
 
 type RoomManager interface {
-	GetOrCreate(name domain.RoomName) RoomService
+	CreateRoom(name domain.RoomName) RoomService
+	GetRoom(id domain.RoomID) (RoomService, bool)
 	List() []RoomInfo
-	StopRoom(name domain.RoomName)
+	StopRoom(name domain.RoomID)
 }

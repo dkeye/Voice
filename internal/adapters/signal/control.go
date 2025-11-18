@@ -8,6 +8,41 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func (ctl *SignalWSController) createRoom(
+	sid core.SessionID,
+	conn *WsSignalConn,
+	data []byte,
+) {
+	type Payload struct {
+		Type string `json:"type"`
+		Name string `json:"name"`
+	}
+	var p Payload
+	if err := json.Unmarshal(data, &p); err != nil {
+		log.Error().Err(err).Str("module", "signal").Msg("bad join payload")
+		ctl.sendJSON(conn, map[string]any{
+			"type":  "error",
+			"error": "bad_payload",
+		})
+		return
+	}
+	raw := p.Name
+	if len(raw) > 36 {
+		raw = raw[:36] // TODO: change to setter
+	}
+	name := domain.RoomName(raw)
+
+	room := ctl.Orch.Rooms.CreateRoom(name)
+	resp := struct {
+		Type string `json:"type"`
+		Room string `json:"room"`
+	}{
+		"room_created",
+		string(room.Room().ID),
+	}
+	ctl.sendJSON(conn, resp)
+}
+
 func (ctl *SignalWSController) handleJoin(
 	sid core.SessionID,
 	conn *WsSignalConn,
@@ -21,12 +56,20 @@ func (ctl *SignalWSController) handleJoin(
 	var p joinPayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("bad join payload")
+		ctl.sendJSON(conn, map[string]any{
+			"type":  "error",
+			"error": "bad_payload",
+		})
 		return
 	}
-
-	roomName := domain.RoomName(p.Room)
-	if roomName == "" {
-		roomName = "main"
+	room, ok := ctl.Orch.Rooms.GetRoom(domain.RoomID(p.Room))
+	if !ok {
+		log.Error().Str("module", "signal").Str("room_id", p.Room).Msg("room is not exists")
+		ctl.sendJSON(conn, map[string]any{
+			"type":  "error",
+			"error": "room is not exists",
+		})
+		return
 	}
 
 	if p.Name != "" {
@@ -34,23 +77,33 @@ func (ctl *SignalWSController) handleJoin(
 		log.Info().Str("module", "signal").Str("sid", string(sid)).Str("name", p.Name).Msg("rename on join")
 	}
 
-	log.Info().Str("module", "signal").Str("sid", string(sid)).Str("room", string(roomName)).Msg("join")
-	ctl.Orch.Join(sid, roomName)
-
-	// Отдаём снапшот комнаты, чтобы клиент мог обновить UI.
-	room := ctl.Orch.Rooms.GetOrCreate(roomName)
-	resp := struct {
-		Type    string           `json:"type"`
-		Room    domain.RoomName  `json:"room"`
-		Members []core.MemberDTO `json:"members"`
-		Count   int              `json:"count"`
+	log.Info().Str("module", "signal").Str("sid", string(sid)).Str("room_id", string(p.Room)).Msg("join")
+	ctl.Orch.Join(sid, domain.RoomID(p.Room))
+	clientResp := struct {
+		Type     string           `json:"type"`
+		Room     domain.RoomID    `json:"room"`
+		RoomName domain.RoomName  `json:"room_name"`
+		Members  []core.MemberDTO `json:"members"`
+		Count    int              `json:"count"`
 	}{
-		Type:    "room_state",
-		Room:    room.Room().Name,
-		Members: room.MembersSnapshot(),
-		Count:   room.MemberCount(),
+		Type:     "room_state",
+		Room:     room.Room().ID,
+		RoomName: room.Room().Name,
+		Members:  room.MembersSnapshot(),
+		Count:    room.MemberCount(),
 	}
-	ctl.sendJSON(conn, resp)
+	ctl.sendJSON(conn, clientResp)
+
+	user, _ := ctl.Orch.Registry.GetOrCreateUser(sid)
+
+	broadcastResp := struct {
+		Type string      `json:"type"`
+		User domain.User `json:"user"`
+	}{
+		Type: "member_joined",
+		User: *user,
+	}
+	ctl.BroadcastFrom(sid, broadcastResp)
 }
 
 // handleLeave — выход из текущей комнаты, соединение при этом не рвётся.
@@ -59,10 +112,25 @@ func (ctl *SignalWSController) handleLeave(
 	conn *WsSignalConn,
 ) {
 	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("leave")
+	roomID, _, ok := ctl.Orch.Registry.RoomOf(sid)
+
 	ctl.Orch.KickBySID(sid)
 	ctl.sendJSON(conn, map[string]any{
 		"type": "left",
 	})
+
+	if ok {
+		user, _ := ctl.Orch.Registry.GetOrCreateUser(sid)
+
+		broadcastResp := struct {
+			Type string      `json:"type"`
+			User domain.User `json:"user"`
+		}{
+			Type: "member_left",
+			User: *user,
+		}
+		ctl.BroadcastRoom(roomID, broadcastResp)
+	}
 }
 
 func (ctl *SignalWSController) handlePing(
@@ -88,6 +156,10 @@ func (ctl *SignalWSController) handleRename(
 	var p renamePayload
 	if err := json.Unmarshal(data, &p); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("bad rename payload")
+		ctl.sendJSON(conn, map[string]any{
+			"type":  "error",
+			"error": "bad_payload",
+		})
 		return
 	}
 	if p.Name == "" {
@@ -100,26 +172,46 @@ func (ctl *SignalWSController) handleRename(
 
 	log.Info().Str("module", "signal").Str("sid", string(sid)).Str("name", p.Name).Msg("rename")
 	ctl.Orch.Registry.UpdateUsername(sid, p.Name)
+	if err := ctl.Orch.Registry.UpdateUsername(sid, p.Name); err != nil {
+		ctl.sendJSON(conn, map[string]any{
+			"type":  "error",
+			"error": "invalid_name",
+		})
+		return
+	}
 	ctl.handleWhoAmI(sid, conn)
+	user, _ := ctl.Orch.Registry.GetOrCreateUser(sid)
+
+	broadcastResp := struct {
+		Type string      `json:"type"`
+		User domain.User `json:"user"`
+	}{
+		Type: "member_updated",
+		User: *user,
+	}
+	ctl.BroadcastFrom(sid, broadcastResp)
 }
 
 func (ctl *SignalWSController) handleWhoAmI(
 	sid core.SessionID,
 	conn *WsSignalConn,
 ) {
-	user := ctl.Orch.Registry.GetOrCreateUser(sid)
-	roomName, _, ok := ctl.Orch.Registry.RoomOf(sid)
+	user, _ := ctl.Orch.Registry.GetOrCreateUser(sid)
 
 	resp := struct {
 		Type     string          `json:"type"`
 		Username string          `json:"username"`
-		Room     domain.RoomName `json:"room,omitempty"`
+		Room     domain.RoomID   `json:"room,omitempty"`
+		RoomName domain.RoomName `json:"room_name,omitempty"`
 	}{
 		Type:     "whoami",
 		Username: user.Username,
 	}
-	if ok {
-		resp.Room = roomName
+	if RoomID, _, ok := ctl.Orch.Registry.RoomOf(sid); ok {
+		if room, ok := ctl.Orch.Rooms.GetRoom(RoomID); ok {
+			resp.RoomName = room.Room().Name
+			resp.Room = RoomID
+		}
 	}
 	ctl.sendJSON(conn, resp)
 }

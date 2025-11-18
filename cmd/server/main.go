@@ -36,7 +36,8 @@ func main() {
 
 	// Properly wire orchestrator with room manager and policy.
 	manager := app.NewRoomManager()
-	policy := app.SimplePolicy{}
+	// policy := app.SimplePolicy{}
+	var policy app.Policy
 	reg := app.NewRegistry()
 	relays := sfu.NewRelayManager()
 
