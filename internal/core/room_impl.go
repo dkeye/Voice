@@ -4,11 +4,11 @@ import (
 	"sync"
 
 	"github.com/dkeye/Voice/internal/domain"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // roomImpl is a threadsafe in-memory room.
-// It never closes adapter-owned resources.
 type roomImpl struct {
 	room   *domain.Room
 	mu     sync.RWMutex
@@ -16,9 +16,13 @@ type roomImpl struct {
 	byUser map[domain.UserID]SessionID
 }
 
-func NewRoomService(room *domain.Room) RoomService {
+func NewRoomService(roomName domain.RoomName) RoomService {
+	newRoom := &domain.Room{
+		ID:   domain.RoomID(uuid.NewString()),
+		Name: roomName,
+	}
 	return &roomImpl{
-		room:   room,
+		room:   newRoom,
 		bySID:  make(map[SessionID]MemberSession),
 		byUser: make(map[domain.UserID]SessionID),
 	}

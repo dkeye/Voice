@@ -61,10 +61,16 @@ func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *WsSignalConn,
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("bad json")
+		ctl.sendJSON(c, map[string]any{
+			"type":  "error",
+			"error": "bad_payload",
+		})
 		return
 	}
 
 	switch env.Type {
+	case "create_room":
+		ctl.createRoom(sid, c, data)
 	case "join":
 		ctl.handleJoin(sid, c, data)
 	case "leave":
@@ -86,11 +92,13 @@ func (ctl *SignalWSController) handleSignal(sid core.SessionID, c *WsSignalConn,
 	}
 }
 
-func (ctl *SignalWSController) sendJSON(c *WsSignalConn, v any) {
+func (ctl *SignalWSController) sendJSON(c core.SignalConnection, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		log.Error().Err(err).Str("module", "signal").Msg("sendJSON marshal")
 		return
 	}
-	_ = c.TrySend(b)
+	if err := c.TrySend(b); err != nil {
+		log.Debug().Err(err).Msg("sendJSON skipped (conn closed)")
+	}
 }

@@ -23,11 +23,8 @@ func (o *Orchestrator) cleanupMedia(sid core.SessionID) {
 	if o.Relays != nil {
 		o.Relays.StopRelay(sid)
 
-		RoomName, _, ok := o.Registry.RoomOf(sid)
-		if ok {
-			for _, snap := range o.Registry.MembersOfRoom(RoomName) {
-				o.Relays.MarkSubscriberDelete(snap.SID, sid)
-			}
+		for _, snap := range o.Registry.RoomMates(sid) {
+			o.Relays.MarkSubscriberDelete(snap.SID, sid)
 		}
 	}
 
@@ -48,7 +45,7 @@ func (o *Orchestrator) OnTrack(ctx context.Context, sid core.SessionID, track *w
 	}
 	o.Relays.StartRelay(ctx, sid, track)
 
-	roomName, _, ok := o.Registry.RoomOf(sid)
+	roomID, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		log.Info().
 			Str("module", "sfu").
@@ -58,7 +55,7 @@ func (o *Orchestrator) OnTrack(ctx context.Context, sid core.SessionID, track *w
 	}
 
 	// Subscribe all existing members in the room to this speaker.
-	for _, snap := range o.Registry.MembersOfRoom(roomName) {
+	for _, snap := range o.Registry.MembersOfRoom(roomID) {
 		if snap.SID == sid {
 			continue
 		}
@@ -84,7 +81,7 @@ func (o *Orchestrator) OnMediaReady(sid core.SessionID) {
 	if o.Relays == nil {
 		return
 	}
-	roomName, _, ok := o.Registry.RoomOf(sid)
+	roomID, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
 	}
@@ -99,7 +96,7 @@ func (o *Orchestrator) OnMediaReady(sid core.SessionID) {
 		return
 	}
 
-	for _, snap := range o.Registry.MembersOfRoom(roomName) {
+	for _, snap := range o.Registry.MembersOfRoom(roomID) {
 		if snap.SID == sid {
 			continue
 		}

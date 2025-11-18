@@ -10,44 +10,42 @@ import (
 
 type RoomManagerImpl struct {
 	mu    sync.RWMutex
-	rooms map[domain.RoomName]core.RoomService
+	rooms map[domain.RoomID]core.RoomService
 }
 
 func NewRoomManager() core.RoomManager {
-	return &RoomManagerImpl{rooms: make(map[domain.RoomName]core.RoomService)}
+	return &RoomManagerImpl{rooms: make(map[domain.RoomID]core.RoomService)}
 }
 
-func (f *RoomManagerImpl) GetOrCreate(name domain.RoomName) core.RoomService {
-	f.mu.RLock()
-	room, ok := f.rooms[name]
-	f.mu.RUnlock()
-	if ok {
-		return room
-	}
+func (f *RoomManagerImpl) CreateRoom(name domain.RoomName) core.RoomService {
+	room := core.NewRoomService(domain.RoomName(name))
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if room, ok = f.rooms[name]; ok {
-		return room
-	}
-	room = core.NewRoomService(&domain.Room{Name: name})
-	f.rooms[name] = room
-	log.Info().Str("module", "app.roommgr").Str("room", string(name)).Msg("created room")
+	f.rooms[room.Room().ID] = room
+	log.Info().Str("module", "app.roommgr").Str("room_id", string(room.Room().ID)).Str("room_name", string(room.Room().Name)).Msg("created room")
 	return room
+}
+
+func (f *RoomManagerImpl) GetRoom(id domain.RoomID) (core.RoomService, bool) {
+	f.mu.RLock()
+	room, ok := f.rooms[id]
+	f.mu.RUnlock()
+	return room, ok
 }
 
 func (f *RoomManagerImpl) List() []core.RoomInfo {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	out := make([]core.RoomInfo, 0, len(f.rooms))
-	for name, r := range f.rooms {
-		out = append(out, core.RoomInfo{Name: name, MemberCount: r.MemberCount()})
+	for id, r := range f.rooms {
+		out = append(out, core.RoomInfo{ID: id, Name: r.Room().Name, MemberCount: r.MemberCount()})
 	}
 	return out
 }
 
-func (f *RoomManagerImpl) StopRoom(name domain.RoomName) {
+func (f *RoomManagerImpl) StopRoom(id domain.RoomID) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	delete(f.rooms, name)
-	log.Info().Str("module", "app.roommgr").Str("room", string(name)).Msg("stopped room")
+	delete(f.rooms, id)
+	log.Info().Str("module", "app.roommgr").Str("room_id", string(id)).Msg("stopped room")
 }
