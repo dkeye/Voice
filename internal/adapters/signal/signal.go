@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/dkeye/Voice/internal/app/orch"
 	"github.com/dkeye/Voice/internal/core"
@@ -17,12 +18,14 @@ import (
 var ErrBackpressure = errors.New("backpressure")
 
 type SignalWSController struct {
-	Orch *orch.Orchestrator
+	Orch        *orch.Orchestrator
+	roomLimiter *RoomRateLimiter
 }
 
 func NewSignalWSController(orch orch.Orchestrator) *SignalWSController {
 	return &SignalWSController{
-		Orch: &orch,
+		Orch:        &orch,
+		roomLimiter: NewRoomRateLimiter(5, time.Minute),
 	}
 }
 

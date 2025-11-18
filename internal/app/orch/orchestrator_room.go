@@ -37,6 +37,9 @@ func (o *Orchestrator) cleanupMembership(sid core.SessionID) {
 	room, ok := o.Rooms.GetRoom(roomID)
 	if ok {
 		room.RemoveMember(sid)
+		if room.MemberCount() == 0 {
+			o.Rooms.StopRoom(roomID)
+		}
 	}
 	o.Registry.RemoveRoom(sid)
 }
