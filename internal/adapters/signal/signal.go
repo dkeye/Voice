@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dkeye/Voice/internal/app/orch"
+	"github.com/dkeye/Voice/internal/config"
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/dkeye/Voice/internal/domain"
 	"github.com/gin-gonic/gin"
@@ -19,12 +20,19 @@ var ErrBackpressure = errors.New("backpressure")
 
 type SignalWSController struct {
 	Orch        *orch.Orchestrator
+	upgrader    websocket.Upgrader
 	roomLimiter *RoomRateLimiter
 }
 
-func NewSignalWSController(orch orch.Orchestrator) *SignalWSController {
+func NewSignalWSController(orch orch.Orchestrator, cfg *config.Config) *SignalWSController {
 	return &SignalWSController{
-		Orch:        &orch,
+		Orch: &orch,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				return origin == cfg.Origin
+			},
+		},
 		roomLimiter: NewRoomRateLimiter(5, time.Minute),
 	}
 }
@@ -75,15 +83,11 @@ func (ctl *SignalWSController) BroadcastRoom(roomID domain.RoomID, v any) {
 	}
 }
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 func (ctl *SignalWSController) HandleSignal(ctx context.Context, c *gin.Context) {
 	sid := core.SessionID(c.GetString("client_token"))
 	log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("new WS connection")
 
-	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	ws, err := ctl.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("ws upgrade")
 		return

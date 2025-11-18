@@ -15,6 +15,7 @@ type Config struct {
 	StaticPath string        `mapstructure:"static_path"`
 	ReadLimit  int64         `mapstructure:"read_limit"`
 	PingPeriod time.Duration `mapstructure:"ping_period"`
+	Origin     string        `mapstructure:"origin"`
 	Secret     string        `mapstructure:"secret"`
 }
 

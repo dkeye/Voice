@@ -3,3 +3,4 @@ port: 8080
 static_path: ./web
 read_limit: 32768
 ping_period: 54s
+origin:

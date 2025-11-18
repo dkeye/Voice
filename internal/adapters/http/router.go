@@ -55,7 +55,10 @@ func SetupRouter(ctx context.Context, cfg *config.Config, orch *orch.Orchestrato
 	api := r.Group("/api")
 
 	api.GET("/ws/signal", func(c *gin.Context) {
-		ctrl := signal.NewSignalWSController(*orch)
+		ctrl := signal.NewSignalWSController(
+			*orch,
+			cfg,
+		)
 		log.Info().Str("module", "adapters.http").Str("sid", c.GetString("client_token")).Msg("ws signal endpoint hit")
 		ctrl.HandleSignal(ctx, c)
 	})
