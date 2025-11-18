@@ -10,4 +10,5 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/voice .
 COPY --from=builder /app/web ./web
+COPY --from=builder /app/config ./config
 CMD [ "./voice" ]
