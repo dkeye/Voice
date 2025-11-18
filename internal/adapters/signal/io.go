@@ -37,6 +37,7 @@ func (ctl *SignalWSController) readPump(ctx context.Context, sid core.SessionID,
 	defer func() {
 		log.Info().Str("module", "signal").Str("sid", string(sid)).Msg("readPump closing")
 		c.Close()
+		go ctl.handleLeave(sid, c)
 	}()
 
 	for {
