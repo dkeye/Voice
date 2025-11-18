@@ -3,6 +3,7 @@ package rtc
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dkeye/Voice/internal/core"
 	"github.com/pion/webrtc/v4"
@@ -18,6 +19,7 @@ type WebRTCConnection struct {
 	onTrack             func(ctx context.Context, track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver)
 	onNegotiationNeeded (func())
 	onClosed            (func())
+	closed              atomic.Bool
 
 	renegotiateMu sync.Mutex
 
@@ -135,7 +137,7 @@ func (c *WebRTCConnection) CreateAndSetOffer() (*webrtc.SessionDescription, erro
 }
 
 func (c *WebRTCConnection) Close() {
-	c.once.Do(func() {
+	if !c.closed.Swap(true) {
 		if c.cancel != nil {
 			c.cancel()
 		}
@@ -149,7 +151,11 @@ func (c *WebRTCConnection) Close() {
 		if c.onClosed != nil {
 			c.onClosed()
 		}
-	})
+	}
+}
+
+func (c *WebRTCConnection) IsClosed() bool {
+	return c.closed.Load()
 }
 
 func (c *WebRTCConnection) AddICECandidate(ci webrtc.ICECandidateInit) error {
@@ -174,6 +180,9 @@ func (c *WebRTCConnection) OnClosed(fn func()) { c.onClosed = fn }
 
 // AddLocalTrack attaches a local static RTP track to the PeerConnection.
 func (c *WebRTCConnection) AddLocalTrack(track *webrtc.TrackLocalStaticRTP) (*webrtc.RTPSender, error) {
+	if c.IsClosed() {
+		return nil, webrtc.ErrConnectionClosed
+	}
 	sender, err := c.pc.AddTrack(track)
 	if err != nil {
 		return nil, err

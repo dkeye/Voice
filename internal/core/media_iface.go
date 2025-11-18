@@ -11,6 +11,7 @@ type MediaConnection interface {
 	Start(ctx context.Context) error
 	// Close should stop all underlying media resources.
 	Close()
+	IsClosed() bool
 	// AddICECandidate applies a remote ICE candidate.
 	AddICECandidate(webrtc.ICECandidateInit) error
 	// LocalDescription returns the current local SDP.
