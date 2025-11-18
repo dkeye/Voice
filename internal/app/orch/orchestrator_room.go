@@ -6,58 +6,23 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (o *Orchestrator) Join(sid core.SessionID, roomName domain.RoomName) {
-	RoomName, _, ok := o.Registry.RoomOf(sid)
+func (o *Orchestrator) Join(sid core.SessionID, roomID domain.RoomID) {
+	existRoomID, _, ok := o.Registry.RoomOf(sid)
 	if ok {
-		log.Info().Str("sid", string(sid)).Str("roomName", string(RoomName)).Msg("already in room")
+		log.Info().Str("sid", string(sid)).Str("roomID", string(existRoomID)).Msg("already in room")
 		return
 	}
-	// if ok {
-	// 	o.KickBySID(sid)
-	// 	log.Info().Str("sid", string(sid)).Str("from_room", string(RoomName)).Msg("kicked from room")
-	// }
 	if session, ok := o.Registry.GetSession(sid); ok {
-		room := o.Rooms.GetOrCreate(roomName)
+		room, ok := o.Rooms.GetRoom(roomID)
+		if !ok {
+			log.Error().Str("module", "orch").Str("room_id", string(roomID)).Msg("room not exists")
+			return
+		}
 		room.AddMember(sid, session)
-		o.Registry.UpdateRoom(sid, roomName)
-		log.Info().Str("sid", string(sid)).Str("room", string(roomName)).Msg("added to room")
+		o.Registry.UpdateRoom(sid, roomID)
+		log.Info().Str("sid", string(sid)).Str("room_id", string(roomID)).Msg("added to room")
 	}
 }
-
-// func (o *Orchestrator) Move(sid core.SessionID, toRoomName string) bool {
-// 	fromRoomName, session, ok := o.Registry.RoomOf(sid)
-// 	if !ok {
-// 		return false
-// 	}
-// 	to := domain.RoomName(toRoomName)
-// 	if to == fromRoomName {
-// 		return true
-// 	}
-
-// 	from := o.Rooms.GetOrCreate(fromRoomName)
-// 	from.RemoveMember(sid)
-
-// 	// Unsubscribe from speakers in the old room, if any.
-// 	if o.Relays != nil {
-// 		for _, snap := range o.Registry.MembersOfRoom(fromRoomName) {
-// 			o.Relays.MarkSubscriberDelete(snap.SID, sid)
-// 		}
-// 	}
-
-// 	if o.Relays.HasRelay(sid) {
-// 		o.Relays.StopRelay(sid)
-// 	}
-
-// 	toRoom := o.Rooms.GetOrCreate(to)
-// 	toRoom.AddMember(sid, session)
-// 	ok = o.Registry.UpdateRoom(sid, to)
-
-// 	if ok {
-// 		o.OnMediaReady(sid)
-// 	}
-
-// 	return ok
-// }
 
 func (o *Orchestrator) KickBySID(sid core.SessionID) {
 	o.cleanupMedia(sid)
@@ -65,18 +30,20 @@ func (o *Orchestrator) KickBySID(sid core.SessionID) {
 }
 
 func (o *Orchestrator) cleanupMembership(sid core.SessionID) {
-	roomName, _, ok := o.Registry.RoomOf(sid)
+	roomID, _, ok := o.Registry.RoomOf(sid)
 	if !ok {
 		return
 	}
-	room := o.Rooms.GetOrCreate(roomName)
-	room.RemoveMember(sid)
+	room, ok := o.Rooms.GetRoom(roomID)
+	if ok {
+		room.RemoveMember(sid)
+	}
 	o.Registry.RemoveRoom(sid)
 }
 
-func (o *Orchestrator) EvictRoom(name domain.RoomName) {
-	for _, snap := range o.Registry.MembersOfRoom(name) {
+func (o *Orchestrator) EvictRoom(id domain.RoomID) {
+	for _, snap := range o.Registry.MembersOfRoom(id) {
 		o.KickBySID(snap.SID)
 	}
-	o.Rooms.StopRoom(name)
+	o.Rooms.StopRoom(id)
 }
